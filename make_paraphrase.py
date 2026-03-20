@@ -10,7 +10,7 @@ from pandas import Flags
 
 from create_adverserial_dataset_test import ask_a_math_question
 
-DEEP_SEEK_API_KEY = str(os.getenv("DEEP_SEEK_API_KEY", "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"))
+DEEP_SEEK_API_KEY = str(os.getenv("DEEP_SEEK_API_KEY"))
 client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=DEEP_SEEK_API_KEY,
@@ -197,6 +197,42 @@ if __name__ == "__main__":
 #
 #     print("adv question", adv_ques)
     print("Starting to make quesyions")
+    import argparse
+
+    parser = argparse.ArgumentParser(description="Generate adversarial math questions.")
+    parser.add_argument(
+        "--input",
+        type=str,
+        default="dataset/gsm8k_processed_train.json",
+        help="Path to input JSON file (default: dataset/gsm8k_processed_train.json)",
+    )
+    parser.add_argument(
+        "--output",
+        type=str,
+        default=None,
+        help="Path to output JSONL file (default: <input_stem>_adversarial.jsonl)",
+    )
+    parser.add_argument(
+        "--start-from",
+        type=int,
+        default=1,
+        help="Index of the record to start from, 0-based (default: 1)",
+    )
+    parser.add_argument(
+        "--limit-per-question",
+        type=int,
+        default=1,
+        help="Max adversarial variants to collect per question (default: 1)",
+    )
+    args = parser.parse_args()
+
+    print("Starting to make questions")
+    make_adverserial_questions(
+        input_file_path=args.input,
+        output_file_path=args.output,
+        limit_per_question=args.limit_per_question,
+        start_from=args.start_from,
+    )
     make_adverserial_questions("dataset/gsm8k_processed_train.json")
 
 
