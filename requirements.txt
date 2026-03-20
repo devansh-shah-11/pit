@@ -13,3 +13,5 @@ transformers
 datasets
 load_dotenv
 OpenAI
+trl
+
