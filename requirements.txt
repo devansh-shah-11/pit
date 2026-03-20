@@ -1,0 +1,15 @@
+regex==2026.1.15
+pytest
+numpy
+torch
+jaxtyping
+psutil
+tiktoken
+einops
+tqdm
+wandb
+memory-profiler
+transformers
+datasets
+load_dotenv
+OpenAI

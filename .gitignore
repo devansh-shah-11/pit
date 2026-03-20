@@ -1,0 +1,6 @@
+.venv
+dataset
+wandb
+checkpoints
+.idea
+__pycache__
