@@ -8,11 +8,12 @@ import random
 import torch
 import wandb
 from datasets import Dataset
+from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 from trl import SFTTrainer, SFTConfig
 
 from utils.defaults import DEVICE
-from core import ask_a_math_question
+from create_adverserial_dataset_test import ask_a_math_question
 
 os.environ["WANDB_API_KEY"] = "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"
 wandb.login(key=os.environ["WANDB_API_KEY"])
@@ -79,7 +80,7 @@ class MathAccuracyCallback(TrainerCallback):
         correct = 0
         per_example_results = []
 
-        for i, entry in enumerate(self.test_records):
+        for i, entry in tqdm(enumerate(self.test_records)):
             question = entry.get("modified_question") or entry.get("original_question")
             answer_ref = str(entry.get("answer_ref", "")).strip()
 
@@ -136,6 +137,7 @@ def main():
     parser.add_argument("--train-file", required=True, help="Path to training .json file.")
     parser.add_argument("--test-file", required=True, help="Path to test/eval .json file.")
     parser.add_argument("--output-dir", default="./sft_output", help="Directory to save the model.")
+    parser.add_argument("--model-name", default=MODEL_NAME, help="Directory to get the model.")
     parser.add_argument("--epochs", type=int, default=3, help="Number of training epochs.")
     parser.add_argument("--batch-size", type=int, default=4, help="Per-device training batch size.")
     parser.add_argument("--max-seq-length", type=int, default=128, help="Maximum token sequence length.")
@@ -146,13 +148,13 @@ def main():
     args = parser.parse_args()
 
     # ── Load model & tokenizer ─────────────────────────────────────────────────
-    print(f"Loading model: {MODEL_NAME}")
-    tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
+    print(f"Loading model: {args.model_name}")
+    tokenizer = AutoTokenizer.from_pretrained(args.model_name)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
     model = AutoModelForCausalLM.from_pretrained(
-        MODEL_NAME,
+        args.model_name,
         torch_dtype=torch.bfloat16,
         trust_remote_code=True,
     )
