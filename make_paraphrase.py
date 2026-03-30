@@ -138,7 +138,7 @@ def make_adverserials_for_one_question(question, answer_ref, limit = 1, max_iter
     return adverserials
 
 
-def make_adverserial_questions(input_file_path, output_file_path=None, limit_per_question=1, start_from=1):
+def make_adverserial_questions(input_file_path, output_file_path=None, limit_per_question=1, start_from=1,end_at=None):
     """
     Reads a JSON array file of question/answer records, generates adversarial variants
     for each, and appends results to an output JSONL file.
@@ -163,7 +163,7 @@ def make_adverserial_questions(input_file_path, output_file_path=None, limit_per
         records = json.load(infile)  # parse the full JSON array
 
     with open(output_path, "a", encoding="utf-8") as outfile:
-        for idx, record in enumerate(records[start_from:], start=start_from + 1):
+        for idx, record in enumerate(records[start_from:end_at], start=start_from + 1):
             question   = record.get("question")
             print("QUESTION", question)
             answer_ref = record.get("answer")
@@ -235,6 +235,12 @@ if __name__ == "__main__":
         default=4,
         help="Min adversarial variants to collect per question (default: 1)",
     )
+    parser.add_argument(
+        "--end-at",
+        type=int,
+        default=None,
+        help="Index of the record to stop at, exclusive, 0-based (default: None = process all)",
+    )
     args = parser.parse_args()
 
     print("Starting to make questions")
@@ -243,6 +249,7 @@ if __name__ == "__main__":
         output_file_path=args.output,
         limit_per_question=args.limit_per_question,
         start_from=args.start_from,
+        end_at=args.end_at,
     )
     # make_adverserial_questions("dataset/gsm8k_processed_train.json")
 
