@@ -3,4 +3,6 @@ dataset
 wandb
 checkpoints
 .idea
+.env
 __pycache__
+

@@ -4,13 +4,17 @@
 
 """
 from openai import OpenAI
+from dotenv import load_dotenv
 import os
+
+load_dotenv()
 
 from pandas import Flags
 
 from create_adverserial_dataset_test import ask_a_math_question
 
 DEEP_SEEK_API_KEY = str(os.getenv("DEEP_SEEK_API_KEY"))
+
 client = OpenAI(
             base_url="https://openrouter.ai/api/v1",
             api_key=DEEP_SEEK_API_KEY,
@@ -80,6 +84,7 @@ def make_adverserials_for_one_question(question, answer_ref, limit = 1, max_iter
         )
 
         response, answer = ask_a_math_question(new_question)
+        print("QUESTION ASKED", new_question)
         print("response", response, "answer", answer)
 
         if answer is None:
