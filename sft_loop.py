@@ -20,8 +20,6 @@ wandb.login(key=os.environ["WANDB_API_KEY"])
 
 # ── Constants ──────────────────────────────────────────────────────────────────
 
-MODEL_NAME = "kmseong/Llama3.2-3B-gsm8k-fullft-atfter-ssft"
-
 
 # ── Prompt formatting ──────────────────────────────────────────────────────────
 

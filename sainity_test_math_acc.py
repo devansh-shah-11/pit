@@ -10,12 +10,11 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM
 
 from create_adverserial_dataset_test import ask_a_math_question
-from utils.defaults import DEVICE
+from utils.defaults import DEVICE, MODEL_NAME
 
 os.environ["WANDB_API_KEY"] = "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"
 wandb.login(key=os.environ["WANDB_API_KEY"])
 
-MODEL_NAME = "kmseong/Llama3.2-3B-gsm8k-fullft-atfter-ssft"
 
 
 # ── Data loading ───────────────────────────────────────────────────────────────
@@ -101,7 +100,7 @@ def main():
         description="Evaluate math accuracy on a test set without any training."
     )
     parser.add_argument("--test-file", required=True, help="Path to test .json file.")
-    parser.add_argument("--model-name", default="kmseong/Llama3.2-3B-gsm8k-fullft-atfter-ssft", help="HuggingFace model name or local path.")
+    parser.add_argument("--model-name", default=MODEL_NAME, help="HuggingFace model name or local path.")
     parser.add_argument("--wandb-run-name", default=None, help="W&B run name (optional).")
     args = parser.parse_args()
 

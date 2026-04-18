@@ -33,6 +33,8 @@ def make_story_by_calling_genai(prompt: str, history):
             )
             # print(f"Made completion: {completion}")
             story_raw = completion.choices[0].message.content
+            if story_raw is None:
+                raise Exception("Generated NONE question")
 
             return story_raw
         except Exception as error:
@@ -84,15 +86,17 @@ def make_adverserials_for_one_question(question, answer_ref, limit = 1, max_iter
         )
 
         response, answer = ask_a_math_question(new_question)
-        print("QUESTION ASKED", new_question)
-        print("response", response, "answer", answer)
+
+        print("QUESTION ASKED", new_question[:200])
+        print("response", response)
+
+        if answer is not None:
+            print("EXTRACTED ANSWER:", answer, "REFERCE ANSWER:", answer_ref, "SIM:", float(answer) == float(answer_ref))
 
         if answer is None:
             print("Fuck that didnt work, answer is None")
         else:
             answer = answer.strip()
-
-        print("Answer", answer)
 
         try:
             if answer is None:
@@ -140,7 +144,11 @@ def make_adverserials_for_one_question(question, answer_ref, limit = 1, max_iter
         except Exception as error:
             print("Some fucking error occured", str(error))
 
-    return adverserials
+    return {
+                "adverserials": adverserials,
+                "answers": answers,
+                "responses": responses
+            }
 
 
 def make_adverserial_questions(input_file_path, output_file_path=None, limit_per_question=1, start_from=1,end_at=None):
@@ -237,7 +245,7 @@ if __name__ == "__main__":
     parser.add_argument(
         "--limit-per-question",
         type=int,
-        default=4,
+        default=3,
         help="Min adversarial variants to collect per question (default: 1)",
     )
     parser.add_argument(

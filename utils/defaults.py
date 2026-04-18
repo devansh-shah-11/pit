@@ -2,7 +2,7 @@ import torch
 
 
 # MODEL_NAME = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
-MODEL_NAME = "kmseong/Llama3.2-3B-gsm8k-fullft-atfter-ssft"
+MODEL_NAME = "nilarnabdebnath/qwen3-1.7b-gsm8k-sft"
 
 BATCH_SIZE = 4
 CONTEXT_LENGTH = 128

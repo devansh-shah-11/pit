@@ -2,17 +2,16 @@ import re
 
 from transformers import AutoModelForCausalLM, AutoTokenizer
 import torch
-
 from utils.defaults import *
 
 model = AutoModelForCausalLM.from_pretrained(
-        "kmseong/Llama3.2-3B-gsm8k-fullft-atfter-ssft",
+        MODEL_NAME,
         dtype=torch.bfloat16,
         trust_remote_code=True
     )
 model.to(DEVICE)
 
-tokenizer = AutoTokenizer.from_pretrained("kmseong/Llama3.2-3B-gsm8k-fullft-atfter-ssft")
+tokenizer = AutoTokenizer.from_pretrained(MODEL_NAME)
 
 
 def extract_answer(text: str) -> str:
@@ -32,15 +31,17 @@ def extract_answer(text: str) -> str:
 def get_math_inference(prompt, model_to_use=model):
     # Generate response
     inputs = tokenizer(prompt, return_tensors="pt").to(model_to_use.device)
+    print("using settings max_new_tokens=256, temperature=0.7,top_p=0.9,do_sample=True")
     outputs = model_to_use.generate(
         **inputs,
         max_new_tokens=256,
         temperature=0.7,
         top_p=0.9,
-        do_sample=False
+        do_sample=True
     )
 
     response = tokenizer.decode(outputs[0][inputs['input_ids'].shape[-1]:], skip_special_tokens=True)
+
     answer = extract_answer(response)
 
     return response, answer
@@ -59,6 +60,7 @@ def ask_a_math_question(question, model_to_use=None):
             [reasoning steps]
             ####
             [final answer (just the number)]"""
+    # prompt = question
 
     print("Core module: prompt", prompt)
 
