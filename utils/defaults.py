@@ -4,6 +4,10 @@ import torch
 # MODEL_NAME = "TinyLlama/TinyLlama-1.1B-Chat-v1.0"
 MODEL_NAME = "nilarnabdebnath/qwen3-1.7b-gsm8k-sft"
 
+EXTERNAL_LLM = "openai/gpt-oss-20b:free"
+# EXTERNAL_LLM = "google/gemma-3n-e4b-it:free"
+EXTERNAL_LLM = "nvidia/nemotron-3-super-120b-a12b:free"
+
 BATCH_SIZE = 4
 CONTEXT_LENGTH = 128
 ITERATIONS = 100000

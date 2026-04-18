@@ -3,9 +3,13 @@
 2. run sft
 
 """
+import time
+
 from openai import OpenAI
 from dotenv import load_dotenv
 import os
+
+from utils.defaults import EXTERNAL_LLM
 
 load_dotenv()
 
@@ -21,14 +25,17 @@ client = OpenAI(
         )
 
 def make_story_by_calling_genai(prompt: str, history):
-    for retry in range(5):
+    # print("PROMPT:", prompt)
+    # print("HISTORY:", history)
+    time_wait = 2
+    for retry in range(20):
         try:
             completion = client.chat.completions.create(
                 # extra_headers={
                 #   "HTTP-Referer": "<YOUR_SITE_URL>", # Optional. Site URL for rankings on openrouter.ai.
                 #   "X-Title": "<YOUR_SITE_NAME>", # Optional. Site title for rankings on openrouter.ai.
                 # },
-                model="openai/gpt-oss-20b:free",
+                model=EXTERNAL_LLM,
                 messages=history
             )
             # print(f"Made completion: {completion}")
@@ -36,17 +43,25 @@ def make_story_by_calling_genai(prompt: str, history):
             if story_raw is None:
                 raise Exception("Generated NONE question")
 
+
             return story_raw
         except Exception as error:
-            print("Got error while making LLM call", str(error))
+            print("Got error while making LLM call", str(error), "will wait for", time_wait)
+            time.sleep(time_wait)
+            time_wait = time_wait * 2
             continue
+
+    raise Exception("EXTERNAL LLM SERVICE DOWN")
     return None
 
 
 def get_paraphrase(question):
+#     prompt = f"""QUESTION: "{question}"
+#
+# Instructions: Add noise to the QUESTION such that an llm solving this will get confused. Add random numbers that are not relevant. Answer ONLY the modified question."""
     prompt = f"""QUESTION: "{question}"
-
-Instructions: Add noise to the QUESTION such that an llm solving this will get confused. Add random numbers that are not relevant. Answer ONLY the modified question."""
+    
+    Instructions: Add a lot of noise to the QUESTION such that an llm solving this will get confused. YOu can add random numbers that are not relevant. Answer ONLY the modified question."""
     new_question = make_story_by_calling_genai(prompt)
 
     return new_question
@@ -56,9 +71,13 @@ def make_adverserials_for_one_question(question, answer_ref, limit = 1, max_iter
     answers = []
     responses = []
 
+    # prompt = f"""QUESTION: "{question}"
+    #
+    #         Instructions: Add noise to the QUESTION such that an llm solving this will get confused. Add random numbers that are not relevant. Make sure the real meaning and answer of the question does not change due to the noise. Answer ONLY the modified question."""
     prompt = f"""QUESTION: "{question}"
 
-            Instructions: Add noise to the QUESTION such that an llm solving this will get confused. Add random numbers that are not relevant. Make sure the real meaning and answer of the question does not change due to the noise. Answer ONLY the modified question."""
+        Instructions: Add a lot of noise to the QUESTION such that an llm solving this will get confused. YOu can add random numbers that are not relevant. Answer ONLY the modified question."""
+
     history = [{
         "role": "user",
         "content": prompt
