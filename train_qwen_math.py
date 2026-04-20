@@ -44,14 +44,21 @@ DEVICE = get_device()
 
 SYSTEM_PROMPT = (
     "You are a precise math solver. "
-    "Identify and ignore any irrelevant information in the problem. "
-    "Show your reasoning step by step, then give the final answer after ####."
+    "First, identify and explicitly ignore any irrelevant information in the problem. "
+    "Then reason step by step using only the relevant facts. "
+    "Do NOT use Python or code. Do NOT use \\boxed{}. "
+    "End your response with exactly this format: #### <number>"
+)
+
+USER_FORMAT_INSTRUCTION = (
+    "Solve this problem step by step. "
+    "End your answer with '#### ' followed by only the numeric answer (no units, no code, no boxes).\n\n"
 )
 
 def format_example(question: str, raw_response: str) -> str:
     return (
         f"<|im_start|>system\n{SYSTEM_PROMPT}<|im_end|>\n"
-        f"<|im_start|>user\n{question}<|im_end|>\n"
+        f"<|im_start|>user\n{USER_FORMAT_INSTRUCTION}{question}<|im_end|>\n"
         f"<|im_start|>assistant\n{raw_response}<|im_end|>"
     )
 
@@ -114,7 +121,7 @@ class MathAccuracyCallback(TrainerCallback):
     def _generate_answer(self, question: str) -> tuple[str, str | None]:
         prompt = (
             f"<|im_start|>system\n{SYSTEM_PROMPT}<|im_end|>\n"
-            f"<|im_start|>user\n{question}<|im_end|>\n"
+            f"<|im_start|>user\n{USER_FORMAT_INSTRUCTION}{question}<|im_end|>\n"
             f"<|im_start|>assistant\n"
         )
         inputs = self.tokenizer(prompt, return_tensors="pt").to(DEVICE)
