@@ -12,7 +12,7 @@ from tqdm import tqdm
 from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 from trl import SFTTrainer, SFTConfig
 
-from utils.defaults import DEVICE, MODEL_NAME
+from utils.defaults import DEVICE
 from create_adverserial_dataset_test import ask_a_math_question
 
 os.environ["WANDB_API_KEY"] = "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"
@@ -50,8 +50,13 @@ def build_dataset(records: list[dict]) -> Dataset:
     skipped = 0
 
     for entry in records:
+        # question = entry.get("modified_question") or entry.get("original_question")
+        # response_ref = entry.get("response_ref")
         question = entry.get("question")
         response_ref = str(entry.get("raw", "")).strip()
+
+        print("question", question)
+        print("response ref", response_ref)
 
         if not question or not response_ref:
             skipped += 1
@@ -62,43 +67,6 @@ def build_dataset(records: list[dict]) -> Dataset:
     if skipped:
         print(f"  Skipped {skipped} entries (missing question or response_ref).")
 
-    return Dataset.from_list(texts)
-
-
-def build_noise_localization_dataset(adversarial_records: list[dict], clean_records: list[dict]) -> Dataset:
-    """Build SFT dataset for Section 3.1: noise localization for correct reasoning.
-
-    Adversarial examples teach the model to identify and ignore distractors.
-    Clean examples (negatives) prevent the model from over-triggering on every problem.
-    """
-    texts = []
-    skipped = 0
-
-    for entry in adversarial_records:
-        modified_questions = entry.get("modified_questions", {})
-        adverserials = modified_questions.get("adverserials", [])
-        noise_localization_targets = modified_questions.get("noise_localization_targets", [])
-
-        for adv_question, target in zip(adverserials, noise_localization_targets):
-            if not adv_question or not target:
-                skipped += 1
-                continue
-            texts.append({"text": format_prompt(adv_question, target)})
-
-    for entry in clean_records:
-        question = entry.get("question")
-        response_ref = str(entry.get("raw", "")).strip()
-        if not question or not response_ref:
-            skipped += 1
-            continue
-        texts.append({"text": format_prompt(question, response_ref)})
-
-    if skipped:
-        print(f"  Skipped {skipped} entries (missing fields).")
-
-    random.shuffle(texts)
-    print(f"  Noise localization dataset: {len(texts)} examples "
-          f"({len(texts) - len(clean_records)} noisy + {len(clean_records)} clean)")
     return Dataset.from_list(texts)
 
 
@@ -196,7 +164,7 @@ def main():
 
     model = AutoModelForCausalLM.from_pretrained(
         args.model_name,
-        dtype=torch.bfloat16,
+        torch_dtype=torch.bfloat16,
         trust_remote_code=True,
     )
     model.to(DEVICE)
