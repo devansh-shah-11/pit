@@ -87,14 +87,14 @@ class PITDataset(Dataset):
             return_tensors="pt",
         )
 
-        input_ids = full_enc["input_ids"].squeeze(0)
-        attention_mask = full_enc["attention_mask"].squeeze(0)
+        input_ids = full_enc["input_ids"].squeeze(0).tolist()
+        attention_mask = full_enc["attention_mask"].squeeze(0).tolist()
 
         # Mask prompt tokens so loss is only on the completion.
         # +1 accounts for the BOS token prepended by the full-text tokenization.
         prompt_len = prompt_enc["input_ids"].shape[1] + 1
-        labels = input_ids.clone()
-        labels[:prompt_len] = -100
+        labels = list(input_ids)
+        labels[:prompt_len] = [-100] * prompt_len
 
         return {
             "input_ids": input_ids,
