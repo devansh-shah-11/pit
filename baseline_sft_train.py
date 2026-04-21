@@ -134,6 +134,7 @@ class AccuracyEvalCallback(TrainerCallback):
             prompts = [PROMPT_TEMPLATE.format(question=s["question"]) for s in batch_samples]
             gold_answers = [s["answer"] for s in batch_samples]
 
+            self.tokenizer.padding_side = "left"
             enc = self.tokenizer(
                 prompts,
                 return_tensors="pt",
@@ -141,6 +142,7 @@ class AccuracyEvalCallback(TrainerCallback):
                 truncation=True,
                 max_length=self.max_prompt_length,
             ).to(device)
+            self.tokenizer.padding_side = "right"
 
             with torch.no_grad():
                 outputs = model.generate(
@@ -150,9 +152,10 @@ class AccuracyEvalCallback(TrainerCallback):
                     pad_token_id=self.tokenizer.eos_token_id,
                 )
 
-            # enc["input_ids"] is right-padded; each sample's prompt ends at its
-            # own attention_mask sum, so slice per-sample to get only new tokens.
-            prompt_lengths = enc["attention_mask"].sum(dim=1).tolist()
+            # With left-padding, all prompts end at the same position (enc shape[1]),
+            # so we can use a single fixed offset for all samples in the batch.
+            prompt_len = enc["input_ids"].shape[1]
+            prompt_lengths = [prompt_len] * len(batch_samples)
 
             for i, (out, gold) in enumerate(zip(outputs, gold_answers)):
                 generated = self.tokenizer.decode(out[int(prompt_lengths[i]):], skip_special_tokens=True)
