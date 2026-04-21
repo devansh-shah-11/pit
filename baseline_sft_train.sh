@@ -13,7 +13,7 @@
 REPO_DIR="/scratch/dns5508/pit"
 TRAIN_FILE="$REPO_DIR/dataset/pit_sft_dataset.jsonl"
 EVAL_FILE="$REPO_DIR/dataset/pit_sft_dataset.jsonl"
-MODEL_NAME="nilarnabdebnath/qwen3-1.7b-gsm8k-sft"
+MODEL_NAME="jahyungu/Qwen2.5-1.5B-Instruct_gsm8k"
 OUTPUT_DIR="$REPO_DIR/checkpoints/pit_sft"
 VENV_DIR="$REPO_DIR/venv"
 
