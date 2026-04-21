@@ -17,9 +17,25 @@ from transformers import (
     AutoModelForCausalLM,
     TrainingArguments,
     Trainer,
-    DataCollatorForSeq2Seq,
     TrainerCallback,
 )
+
+
+def causal_lm_collator(pad_token_id):
+    def collate(features):
+        max_len = max(len(f["input_ids"]) for f in features)
+        input_ids, attention_mask, labels = [], [], []
+        for f in features:
+            pad_len = max_len - len(f["input_ids"])
+            input_ids.append(f["input_ids"] + [pad_token_id] * pad_len)
+            attention_mask.append(f["attention_mask"] + [0] * pad_len)
+            labels.append(f["labels"] + [-100] * pad_len)
+        return {
+            "input_ids": torch.tensor(input_ids, dtype=torch.long),
+            "attention_mask": torch.tensor(attention_mask, dtype=torch.long),
+            "labels": torch.tensor(labels, dtype=torch.long),
+        }
+    return collate
 
 
 PROMPT_TEMPLATE = """Solve this math problem step by step:
@@ -289,11 +305,7 @@ def main(args):
         dataloader_num_workers=2,
     )
 
-    data_collator = DataCollatorForSeq2Seq(
-        tokenizer=tokenizer,
-        model=model,
-        padding=True,
-    )
+    data_collator = causal_lm_collator(tokenizer.pad_token_id)
 
     accuracy_callback = None
     callbacks = []
