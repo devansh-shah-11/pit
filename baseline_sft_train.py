@@ -98,9 +98,6 @@ class PITDataset(Dataset):
             "input_ids": input_ids,
             "attention_mask": attention_mask,
             "labels": labels,
-            # stored for accuracy eval; not passed to model
-            "answer": sample["answer"],
-            "question": sample["question"],
         }
 
 
@@ -178,18 +175,6 @@ class AccuracyEvalCallback(TrainerCallback):
         model.train()
 
 
-class PITTrainer(Trainer):
-    """Drops non-tensor keys (answer, question) before forwarding to the model."""
-
-    def compute_loss(self, model, inputs, return_outputs=False, **kwargs):
-        inputs = {k: v for k, v in inputs.items() if k in ("input_ids", "attention_mask", "labels")}
-        return super().compute_loss(model, inputs, return_outputs=return_outputs, **kwargs)
-
-    def prediction_step(self, model, inputs, prediction_loss_only, ignore_keys=None):
-        inputs = {k: v for k, v in inputs.items() if k in ("input_ids", "attention_mask", "labels")}
-        return super().prediction_step(model, inputs, prediction_loss_only, ignore_keys=ignore_keys)
-
-
 def main(args):
     tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
     tokenizer.pad_token = tokenizer.eos_token
@@ -219,14 +204,11 @@ def main(args):
         logging_steps=10,
         eval_strategy="steps" if eval_dataset else "no",
         eval_steps=eval_steps if eval_dataset else None,
-        save_strategy="steps",
-        save_steps=eval_steps,          # align saves with evals
-        save_total_limit=3,
+        save_strategy="no",
         load_best_model_at_end=False,
         report_to="wandb" if args.use_wandb else "none",
         run_name=f"pit-sft-{args.model_name.split('/')[-1]}",
         dataloader_num_workers=2,
-        remove_unused_columns=False
     )
 
     data_collator = DataCollatorForSeq2Seq(
@@ -246,7 +228,7 @@ def main(args):
             batch_size=args.batch_size,
         ))
 
-    trainer = PITTrainer(
+    trainer = Trainer(
         model=model,
         args=training_args,
         train_dataset=train_dataset,
