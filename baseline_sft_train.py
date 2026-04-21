@@ -177,7 +177,7 @@ class AccuracyEvalCallback(TrainerCallback):
         self._vllm = LLM(
             model=model_path,
             dtype="bfloat16",
-            gpu_memory_utilization=0.45,  # ~18GB on A100 40GB; leaves room for training model
+            gpu_memory_utilization=0.45,  # ~12GB on A100 40GB; leaves room for training model
             max_model_len=self.max_prompt_length + self.max_new_tokens,
             tensor_parallel_size=1,
         )
@@ -197,7 +197,12 @@ class AccuracyEvalCallback(TrainerCallback):
             model.save_pretrained(tmp_dir)
             self.tokenizer.save_pretrained(tmp_dir)
             if self._vllm is not None:
+                from vllm.distributed.parallel_state import destroy_model_parallel
+                destroy_model_parallel()
                 del self._vllm
+                self._vllm = None
+                import gc
+                gc.collect()
                 torch.cuda.empty_cache()
             self._init_vllm(tmp_dir)
 
@@ -263,6 +268,16 @@ class AccuracyEvalCallback(TrainerCallback):
                     "accuracy_adversarial": adv_acc,
                 }, f, indent=2)
 
+        if self.use_vllm and self._vllm is not None:
+            from vllm.distributed.parallel_state import destroy_model_parallel
+            destroy_model_parallel()
+            del self._vllm
+            self._vllm = None
+            import gc
+            gc.collect()
+
+        torch.cuda.synchronize()
+        torch.cuda.empty_cache()
         model.train()
 
 
