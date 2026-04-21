@@ -110,11 +110,19 @@ class PITDataset(Dataset):
 class AccuracyEvalCallback(TrainerCallback):
     """
     After each evaluation, runs greedy generation on the eval set,
-    computes exact-match accuracy, and saves a 'best' checkpoint when
-    accuracy improves.
+    computes exact-match accuracy (overall + per source: original vs adversarial),
+    and saves a 'best' checkpoint when overall accuracy improves.
+
+    use_vllm=True offloads generation to vLLM. On a single A100 40GB,
+    gpu_memory_utilization=0.45 leaves ~18GB for the training model and ~18GB
+    for vLLM, avoiding OOM. The vLLM engine is re-initialized each eval with
+    fresh weights saved to a temp dir.
     """
 
-    def __init__(self, eval_dataset, tokenizer, output_dir: str, max_new_tokens: int = 256, batch_size: int = 8, max_prompt_length: int = 1024):
+    def __init__(self, eval_dataset, tokenizer, output_dir: str,
+                 max_new_tokens: int = 256, batch_size: int = 8,
+                 max_prompt_length: int = 1024, use_vllm: bool = False,
+                 model_name: str = ""):
         self.eval_dataset = eval_dataset
         self.tokenizer = tokenizer
         self.output_dir = output_dir
@@ -122,67 +130,122 @@ class AccuracyEvalCallback(TrainerCallback):
         self.max_new_tokens = max_new_tokens
         self.batch_size = batch_size
         self.max_prompt_length = max_prompt_length
+        self.use_vllm = use_vllm
+        self.model_name = model_name
         self.best_accuracy = -1.0
+        self._vllm = None
+
+    def _generate_transformers(self, prompts, model, device):
+        self.tokenizer.padding_side = "left"
+        enc = self.tokenizer(
+            prompts,
+            return_tensors="pt",
+            padding=True,
+            truncation=True,
+            max_length=self.max_prompt_length,
+        ).to(device)
+        self.tokenizer.padding_side = "right"
+
+        with torch.no_grad():
+            outputs = model.generate(
+                **enc,
+                max_new_tokens=self.max_new_tokens,
+                do_sample=False,
+                pad_token_id=self.tokenizer.eos_token_id,
+            )
+
+        prompt_len = enc["input_ids"].shape[1]
+        return [self.tokenizer.decode(out[prompt_len:], skip_special_tokens=True) for out in outputs]
+
+    def _init_vllm(self, model_path):
+        from vllm import LLM
+        self._vllm = LLM(
+            model=model_path,
+            dtype="bfloat16",
+            gpu_memory_utilization=0.45,  # ~18GB on A100 40GB; leaves room for training model
+            max_model_len=self.max_prompt_length + self.max_new_tokens,
+            tensor_parallel_size=1,
+        )
+
+    def _generate_vllm(self, prompts):
+        from vllm import SamplingParams
+        params = SamplingParams(max_tokens=self.max_new_tokens, temperature=0)
+        results = self._vllm.generate(prompts, params)
+        return [r.outputs[0].text for r in results]
 
     def on_evaluate(self, args, state, control, model, **kwargs):
         model.eval()
         device = next(model.parameters()).device
 
-        correct = 0
-        total = 0
+        if self.use_vllm:
+            tmp_dir = os.path.join(self.output_dir, "_vllm_tmp")
+            model.save_pretrained(tmp_dir)
+            self.tokenizer.save_pretrained(tmp_dir)
+            if self._vllm is not None:
+                del self._vllm
+                torch.cuda.empty_cache()
+            self._init_vllm(tmp_dir)
+
+        stats = {
+            "overall":     {"correct": 0, "total": 0},
+            "original":    {"correct": 0, "total": 0},
+            "adversarial": {"correct": 0, "total": 0},
+        }
 
         for start in range(0, len(self.eval_dataset), self.batch_size):
             batch_samples = [self.eval_dataset.samples[i]
                              for i in range(start, min(start + self.batch_size, len(self.eval_dataset)))]
 
-            prompts = [PROMPT_TEMPLATE.format(question=s["question"]) for s in batch_samples]
+            prompts      = [PROMPT_TEMPLATE.format(question=s["question"]) for s in batch_samples]
             gold_answers = [s["answer"] for s in batch_samples]
+            sources      = [s.get("source", "original") for s in batch_samples]
 
-            self.tokenizer.padding_side = "left"
-            enc = self.tokenizer(
-                prompts,
-                return_tensors="pt",
-                padding=True,
-                truncation=True,
-                max_length=self.max_prompt_length,
-            ).to(device)
-            self.tokenizer.padding_side = "right"
+            if self.use_vllm:
+                generated_texts = self._generate_vllm(prompts)
+            else:
+                generated_texts = self._generate_transformers(prompts, model, device)
 
-            with torch.no_grad():
-                outputs = model.generate(
-                    **enc,
-                    max_new_tokens=self.max_new_tokens,
-                    do_sample=False,
-                    pad_token_id=self.tokenizer.eos_token_id,
-                )
+            for gen, gold, source in zip(generated_texts, gold_answers, sources):
+                is_correct = extract_answer(gen).strip() == gold.strip()
+                stats["overall"]["total"] += 1
+                stats["overall"]["correct"] += is_correct
+                src_key = "adversarial" if source == "adversarial" else "original"
+                stats[src_key]["total"] += 1
+                stats[src_key]["correct"] += is_correct
 
-            # With left-padding, all prompts end at the same position (enc shape[1]),
-            # so we can use a single fixed offset for all samples in the batch.
-            prompt_len = enc["input_ids"].shape[1]
-            prompt_lengths = [prompt_len] * len(batch_samples)
+        def acc(d):
+            return d["correct"] / d["total"] if d["total"] > 0 else 0.0
 
-            for i, (out, gold) in enumerate(zip(outputs, gold_answers)):
-                generated = self.tokenizer.decode(out[int(prompt_lengths[i]):], skip_special_tokens=True)
-                pred = extract_answer(generated)
-                if pred.strip() == gold.strip():
-                    correct += 1
-                total += 1
+        overall_acc = acc(stats["overall"])
+        orig_acc    = acc(stats["original"])
+        adv_acc     = acc(stats["adversarial"])
 
-        accuracy = correct / total if total > 0 else 0.0
-        print(f"\n[AccuracyEval] step={state.global_step}  accuracy={accuracy:.4f}  ({correct}/{total})")
+        print(
+            f"\n[AccuracyEval] step={state.global_step}\n"
+            f"  Overall:     {overall_acc:.4f}  ({stats['overall']['correct']}/{stats['overall']['total']})\n"
+            f"  Original:    {orig_acc:.4f}  ({stats['original']['correct']}/{stats['original']['total']})\n"
+            f"  Adversarial: {adv_acc:.4f}  ({stats['adversarial']['correct']}/{stats['adversarial']['total']})"
+        )
 
-        # Log via trainer so metric appears in wandb
         if hasattr(self, "_trainer"):
-            self._trainer.log({"eval_accuracy": accuracy})
+            self._trainer.log({
+                "eval_accuracy":             overall_acc,
+                "eval_accuracy_clean":    orig_acc,
+                "eval_accuracy_adversarial": adv_acc,
+            })
 
-        if accuracy > self.best_accuracy:
-            self.best_accuracy = accuracy
-            print(f"[AccuracyEval] New best accuracy={accuracy:.4f} — saving to {self.best_dir}")
+        if overall_acc > self.best_accuracy:
+            self.best_accuracy = overall_acc
+            print(f"[AccuracyEval] New best accuracy={overall_acc:.4f} — saving to {self.best_dir}")
             model.save_pretrained(self.best_dir)
             self.tokenizer.save_pretrained(self.best_dir)
-            # Write a small metadata file
             with open(os.path.join(self.best_dir, "best_info.json"), "w") as f:
-                json.dump({"step": state.global_step, "accuracy": accuracy}, f, indent=2)
+                json.dump({
+                    "step": state.global_step,
+                    "accuracy":             overall_acc,
+                    "accuracy_original":    orig_acc,
+                    "accuracy_adversarial": adv_acc,
+                }, f, indent=2)
 
         model.train()
 
@@ -240,6 +303,8 @@ def main(args):
             max_new_tokens=256,
             batch_size=args.batch_size,
             max_prompt_length=args.max_length,
+            use_vllm=args.use_vllm,
+            model_name=args.model_name,
         )
         callbacks.append(accuracy_callback)
 
@@ -283,6 +348,7 @@ if __name__ == "__main__":
     parser.add_argument("--max_length", type=int, default=768)
     parser.add_argument("--eval_steps", type=int, default=100)
     parser.add_argument("--use_wandb", action="store_true")
+    parser.add_argument("--use_vllm", action="store_true")
     args = parser.parse_args()
 
     main(args)
