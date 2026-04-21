@@ -112,9 +112,8 @@ class PITDataset(Dataset):
 
         # Mask prompt tokens so loss is only on the completion.
         # +1 accounts for the BOS token prepended by the full-text tokenization.
-        prompt_len = prompt_enc["input_ids"].shape[1] + 1
-        labels = list(input_ids)
-        labels[:prompt_len] = [-100] * prompt_len
+        prompt_len = min(prompt_enc["input_ids"].shape[1] + 1, len(input_ids))
+        labels = [-100] * prompt_len + input_ids[prompt_len:]
 
         return {
             "input_ids": input_ids,
