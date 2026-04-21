@@ -59,5 +59,6 @@ singularity exec --bind /scratch --nv \
       --lr         $LR \
       --output_dir $OUTPUT_DIR \
       --eval_steps $EVAL_STEPS \
-      --use_wandb
+      --use_wandb \
+      --use_vllm
   "
