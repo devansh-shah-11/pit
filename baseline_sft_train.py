@@ -7,6 +7,7 @@ is saved to {output_dir}/best and the final model to {output_dir}/final.
 
 import json
 import os
+import random
 import argparse
 
 import torch
@@ -47,7 +48,7 @@ def extract_answer(text: str) -> str:
 
 
 class PITDataset(Dataset):
-    def __init__(self, path: str, tokenizer, max_length: int = 768):
+    def __init__(self, path: str, tokenizer, max_length: int = 768, shuffle: bool = True):
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.samples = []
@@ -57,6 +58,9 @@ class PITDataset(Dataset):
                 line = line.strip()
                 if line:
                     self.samples.append(json.loads(line))
+
+        if shuffle:
+            random.shuffle(self.samples)
 
     def __len__(self):
         return len(self.samples)
