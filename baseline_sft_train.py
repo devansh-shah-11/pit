@@ -251,7 +251,9 @@ class AccuracyEvalCallback(TrainerCallback):
 
 
 def main(args):
-    tokenizer = AutoTokenizer.from_pretrained(args.model_name, trust_remote_code=True)
+    tokenizer = AutoTokenizer.from_pretrained(
+        args.model_name, trust_remote_code=True, cache_dir=args.cache_dir
+    )
     tokenizer.pad_token = tokenizer.eos_token
     tokenizer.padding_side = "right"
 
@@ -259,6 +261,7 @@ def main(args):
         args.model_name,
         trust_remote_code=True,
         torch_dtype=torch.bfloat16,
+        cache_dir=args.cache_dir,
     )
 
     train_dataset = PITDataset(args.train_file, tokenizer, max_length=args.max_length)
@@ -290,7 +293,6 @@ def main(args):
         tokenizer=tokenizer,
         model=model,
         padding=True,
-        pad_to_multiple_of=8,
     )
 
     accuracy_callback = None
@@ -349,6 +351,8 @@ if __name__ == "__main__":
     parser.add_argument("--eval_steps", type=int, default=100)
     parser.add_argument("--use_wandb", action="store_true")
     parser.add_argument("--use_vllm", action="store_true")
+    parser.add_argument("--cache_dir", default=None,
+                        help="Local dir to cache/load model weights (avoids re-downloading)")
     args = parser.parse_args()
 
     main(args)
