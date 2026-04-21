@@ -1,5 +1,6 @@
 #!/bin/bash
 #SBATCH --job-name=pit-sft
+#SBATCH --account=csci_ga_3033_131-2026sp
 #SBATCH --output=./logs_pit_sft/%j_%x.out
 #SBATCH --error=./logs_pit_sft/%j_%x.err
 #SBATCH --mail-type=END
