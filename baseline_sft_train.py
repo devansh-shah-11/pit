@@ -7,12 +7,10 @@ is saved to {output_dir}/best and the final model to {output_dir}/final.
 
 import json
 import os
-import re
-import shutil
 import argparse
 
 import torch
-from torch.utils.data import Dataset, DataLoader
+from torch.utils.data import Dataset
 from transformers import (
     AutoTokenizer,
     AutoModelForCausalLM,
@@ -71,7 +69,7 @@ class PITDataset(Dataset):
             reasoning=sample["reasoning"],
             answer=sample["answer"],
         )
-        full_text = prompt + completion
+        full_text = prompt + "\n" + completion
 
         full_enc = self.tokenizer(
             full_text,
@@ -79,18 +77,22 @@ class PITDataset(Dataset):
             max_length=self.max_length,
             return_tensors="pt",
         )
+        # Tokenize prompt alone to find its token length within the full sequence.
+        # add_special_tokens=False avoids a double BOS when the full text already has one.
         prompt_enc = self.tokenizer(
-            prompt,
+            prompt + "\n",
             truncation=True,
             max_length=self.max_length,
+            add_special_tokens=False,
             return_tensors="pt",
         )
 
         input_ids = full_enc["input_ids"].squeeze(0)
         attention_mask = full_enc["attention_mask"].squeeze(0)
 
-        # Mask prompt tokens so loss is only on the completion
-        prompt_len = prompt_enc["input_ids"].shape[1]
+        # Mask prompt tokens so loss is only on the completion.
+        # +1 accounts for the BOS token prepended by the full-text tokenization.
+        prompt_len = prompt_enc["input_ids"].shape[1] + 1
         labels = input_ids.clone()
         labels[:prompt_len] = -100
 
@@ -108,13 +110,14 @@ class AccuracyEvalCallback(TrainerCallback):
     accuracy improves.
     """
 
-    def __init__(self, eval_dataset, tokenizer, output_dir: str, max_new_tokens: int = 256, batch_size: int = 8):
+    def __init__(self, eval_dataset, tokenizer, output_dir: str, max_new_tokens: int = 256, batch_size: int = 8, max_prompt_length: int = 1024):
         self.eval_dataset = eval_dataset
         self.tokenizer = tokenizer
         self.output_dir = output_dir
         self.best_dir = os.path.join(output_dir, "best")
         self.max_new_tokens = max_new_tokens
         self.batch_size = batch_size
+        self.max_prompt_length = max_prompt_length
         self.best_accuracy = -1.0
 
     def on_evaluate(self, args, state, control, model, **kwargs):
@@ -124,7 +127,6 @@ class AccuracyEvalCallback(TrainerCallback):
         correct = 0
         total = 0
 
-        # Batch through eval set manually (eval_dataset items have "answer"/"question" extras)
         for start in range(0, len(self.eval_dataset), self.batch_size):
             batch_samples = [self.eval_dataset.samples[i]
                              for i in range(start, min(start + self.batch_size, len(self.eval_dataset)))]
@@ -137,7 +139,7 @@ class AccuracyEvalCallback(TrainerCallback):
                 return_tensors="pt",
                 padding=True,
                 truncation=True,
-                max_length=512,
+                max_length=self.max_prompt_length,
             ).to(device)
 
             with torch.no_grad():
@@ -148,9 +150,12 @@ class AccuracyEvalCallback(TrainerCallback):
                     pad_token_id=self.tokenizer.eos_token_id,
                 )
 
+            # enc["input_ids"] is right-padded; each sample's prompt ends at its
+            # own attention_mask sum, so slice per-sample to get only new tokens.
+            prompt_lengths = enc["attention_mask"].sum(dim=1).tolist()
+
             for i, (out, gold) in enumerate(zip(outputs, gold_answers)):
-                prompt_len = enc["input_ids"].shape[1]
-                generated = self.tokenizer.decode(out[prompt_len:], skip_special_tokens=True)
+                generated = self.tokenizer.decode(out[int(prompt_lengths[i]):], skip_special_tokens=True)
                 pred = extract_answer(generated)
                 if pred.strip() == gold.strip():
                     correct += 1
@@ -159,9 +164,9 @@ class AccuracyEvalCallback(TrainerCallback):
         accuracy = correct / total if total > 0 else 0.0
         print(f"\n[AccuracyEval] step={state.global_step}  accuracy={accuracy:.4f}  ({correct}/{total})")
 
-        # Log to trainer state so it appears in wandb / logs
-        if state.log_history is not None:
-            state.log_history.append({"eval_accuracy": accuracy, "step": state.global_step})
+        # Log via trainer so metric appears in wandb
+        if hasattr(self, "_trainer"):
+            self._trainer.log({"eval_accuracy": accuracy})
 
         if accuracy > self.best_accuracy:
             self.best_accuracy = accuracy
@@ -201,7 +206,7 @@ def main(args):
         warmup_ratio=0.05,
         bf16=torch.cuda.is_bf16_supported(),
         fp16=not torch.cuda.is_bf16_supported(),
-        logging_steps=10,
+        logging_steps=1,
         eval_strategy="steps" if eval_dataset else "no",
         eval_steps=eval_steps if eval_dataset else None,
         save_strategy="no",
@@ -218,15 +223,18 @@ def main(args):
         pad_to_multiple_of=8,
     )
 
+    accuracy_callback = None
     callbacks = []
     if eval_dataset is not None:
-        callbacks.append(AccuracyEvalCallback(
+        accuracy_callback = AccuracyEvalCallback(
             eval_dataset=eval_dataset,
             tokenizer=tokenizer,
             output_dir=args.output_dir,
             max_new_tokens=256,
             batch_size=args.batch_size,
-        ))
+            max_prompt_length=args.max_length,
+        )
+        callbacks.append(accuracy_callback)
 
     trainer = Trainer(
         model=model,
@@ -236,6 +244,9 @@ def main(args):
         data_collator=data_collator,
         callbacks=callbacks,
     )
+
+    if accuracy_callback is not None:
+        accuracy_callback._trainer = trainer
 
     trainer.train()
 
