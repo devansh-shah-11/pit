@@ -245,8 +245,9 @@ class AccuracyEvalCallback(TrainerCallback):
         if hasattr(self, "_trainer"):
             self._trainer.log({
                 "eval_accuracy":             overall_acc,
-                "eval_accuracy_clean":    orig_acc,
+                "eval_accuracy_clean":       orig_acc,
                 "eval_accuracy_adversarial": adv_acc,
+                "train/global_step":         state.global_step,
             })
 
         if overall_acc > self.best_accuracy:
