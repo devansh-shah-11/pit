@@ -18,6 +18,12 @@ Provide your final answer in the format:
 [final answer (just the number)]"""
 
 
+def build_chat_prompt(question: str, tokenizer) -> str:
+    """Wrap PROMPT_TEMPLATE in the model's chat format so instruct models respond correctly."""
+    messages = [{"role": "user", "content": PROMPT_TEMPLATE.format(question=question)}]
+    return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+
 def extract_answer(text: str) -> str:
     parts = text.split("####")
     if len(parts) < 2:
@@ -124,7 +130,7 @@ def evaluate(args):
 
     for start in range(0, len(samples), args.batch_size):
         batch = samples[start: start + args.batch_size]
-        prompts      = [PROMPT_TEMPLATE.format(question=s["question"]) for s in batch]
+        prompts      = [build_chat_prompt(s["question"], tokenizer) for s in batch]
         gold_answers = [s["answer"] for s in batch]
         sources      = [s.get("source", "original") for s in batch]
 
