@@ -37,7 +37,7 @@ singularity exec --bind /scratch --nv \
 
     pip install -q -r $REPO_DIR/requirements.txt
 
-    python $REPO_DIR/eval_base_model.py \
+    python $REPO_DIR/eval_sft_base_model.py \
       --model_name  $MODEL_NAME \
       --eval_file   $EVAL_FILE \
       --batch_size  16 \
