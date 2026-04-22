@@ -39,7 +39,7 @@ singularity exec --bind /scratch --nv \
 
     pip install -q -r $REPO_DIR/requirements.txt
 
-    python $REPO_DIR/eval_gsm8k.py \
+    python $REPO_DIR/eval_sft_gsm8k.py \
       --base_model  $BASE_MODEL \
       --best_model  $BEST_MODEL \
       --eval_file   $EVAL_FILE \
