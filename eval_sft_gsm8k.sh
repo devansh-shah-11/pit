@@ -12,7 +12,7 @@
 
 # ── Configuration ─────────────────────────────────────────────────────────────
 REPO_DIR="/scratch/dns5508/pit"
-EVAL_FILE="$REPO_DIR/usable_dataset/gsm8k_processed_test_sample.json"
+EVAL_FILE="$REPO_DIR/usable_dataset/gsm8k_processed_test.json"
 BASE_MODEL="jahyungu/Qwen2.5-1.5B-Instruct_gsm8k"
 BEST_MODEL="$REPO_DIR/checkpoints/pit_sft/best"
 OUTPUT_FILE="$REPO_DIR/eval_gsm8k_results.json"
