@@ -62,8 +62,22 @@ def generate_transformers(prompts, model, tokenizer, device, max_new_tokens, max
     return [tokenizer.decode(out[prompt_len:], skip_special_tokens=True) for out in outputs]
 
 
-def generate_vllm(prompts, llm, max_new_tokens):
+def generate_vllm(prompts, llm, max_new_tokens, tokenizer=None, max_prompt_length=None):
     from vllm import SamplingParams
+    
+    # Truncate prompts if tokenizer and max_prompt_length are provided
+    if tokenizer and max_prompt_length:
+        truncated_prompts = []
+        for prompt in prompts:
+            tokens = tokenizer.encode(prompt, truncation=False)
+            if len(tokens) > max_prompt_length:
+                # Decode back to text with truncation
+                truncated_text = tokenizer.decode(tokens[:max_prompt_length], skip_special_tokens=False)
+                truncated_prompts.append(truncated_text)
+            else:
+                truncated_prompts.append(prompt)
+        prompts = truncated_prompts
+    
     params = SamplingParams(max_tokens=max_new_tokens, temperature=0)
     results = llm.generate(prompts, params)
     return [r.outputs[0].text for r in results]
@@ -115,7 +129,7 @@ def evaluate(args):
         sources      = [s.get("source", "original") for s in batch]
 
         if args.use_vllm:
-            generated = generate_vllm(prompts, llm, args.max_new_tokens)
+            generated = generate_vllm(prompts, llm, args.max_new_tokens, tokenizer, args.max_prompt_length)
         else:
             generated = generate_transformers(
                 prompts, model, tokenizer, device,
