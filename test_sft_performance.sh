@@ -51,7 +51,7 @@ singularity exec --bind /scratch --nv \
       --model_name  $BASE_MODEL \
       --eval_file   $ADV_EVAL_FILE \
       --batch_size  16 \
-      --max_new_tokens 256 \
+      --max_new_tokens 1024 \
       --max_prompt_length 1024 \
       --gpu_memory_utilization 0.85 \
       --output_file $ADV_OUTPUT_FILE \
@@ -64,7 +64,7 @@ singularity exec --bind /scratch --nv \
       --best_model  $BEST_MODEL \
       --eval_file   $GSM8K_EVAL_FILE \
       --batch_size  16 \
-      --max_new_tokens 256 \
+      --max_new_tokens 1024 \
       --max_prompt_length 1024 \
       --gpu_memory_utilization 0.85 \
       --output_file $GSM8K_OUTPUT_FILE \

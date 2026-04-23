@@ -3,6 +3,7 @@ Evaluate base model and best checkpoint on gsm8k_processed_test_sample.json.
 Reports exact-match accuracy for each model.
 """
 
+import re
 import json
 import argparse
 import torch
@@ -25,14 +26,25 @@ def build_chat_prompt(question: str, tokenizer) -> str:
 
 
 def extract_answer(text: str) -> str:
-    parts = text.split("####")
-    if len(parts) < 2:
-        return ""
-    for line in parts[-1].splitlines():
-        line = line.strip()
-        if line:
-            return line
-    return ""
+    if "####" in text:
+        answer_part = text.split("####")[-1].strip()
+        numbers = re.findall(r"-?\d+\.?\d*", answer_part)
+        if numbers:
+            return numbers[0]
+    # fallback: last number anywhere in the output
+    numbers = re.findall(r"-?\d+\.?\d*", text)
+    return numbers[-1] if numbers else ""
+
+
+def answers_match(pred: str, gold: str) -> bool:
+    pred = pred.strip().replace(",", "").replace(" ", "")
+    gold = gold.strip().replace(",", "").replace(" ", "")
+    if pred == gold:
+        return True
+    try:
+        return float(pred) == float(gold)
+    except ValueError:
+        return False
 
 
 def load_samples(path: str):
@@ -104,8 +116,8 @@ def evaluate_model(model_path, samples, args, device):
             generated = generate_transformers(model, tokenizer, prompts, device, args.max_new_tokens, args.max_prompt_length)
 
         for gen, gold, sample in zip(generated, gold_answers, batch):
-            pred = extract_answer(gen).strip()
-            is_correct = pred == gold.strip()
+            pred = extract_answer(gen)
+            is_correct = answers_match(pred, gold)
             correct += is_correct
             total += 1
             results.append({"question": sample["question"], "gold": gold, "pred": pred, "correct": is_correct})
@@ -158,7 +170,7 @@ if __name__ == "__main__":
     parser.add_argument("--best_model",  required=True)
     parser.add_argument("--eval_file",   required=True)
     parser.add_argument("--batch_size",  type=int, default=16)
-    parser.add_argument("--max_new_tokens", type=int, default=256)
+    parser.add_argument("--max_new_tokens", type=int, default=1024)
     parser.add_argument("--max_prompt_length", type=int, default=1024)
     parser.add_argument("--use_vllm",   action="store_true")
     parser.add_argument("--gpu_memory_utilization", type=float, default=0.85)

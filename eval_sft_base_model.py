@@ -3,6 +3,7 @@ Evaluate a model (base or fine-tuned) on test data.
 Reports clean (original), adversarial, and overall exact-match accuracy.
 """
 
+import re
 import json
 import argparse
 import torch
@@ -25,14 +26,25 @@ def build_chat_prompt(question: str, tokenizer) -> str:
 
 
 def extract_answer(text: str) -> str:
-    parts = text.split("####")
-    if len(parts) < 2:
-        return ""
-    for line in parts[-1].splitlines():
-        line = line.strip()
-        if line:
-            return line
-    return ""
+    if "####" in text:
+        answer_part = text.split("####")[-1].strip()
+        numbers = re.findall(r"-?\d+\.?\d*", answer_part)
+        if numbers:
+            return numbers[0]
+    # fallback: last number anywhere in the output
+    numbers = re.findall(r"-?\d+\.?\d*", text)
+    return numbers[-1] if numbers else ""
+
+
+def answers_match(pred: str, gold: str) -> bool:
+    pred = pred.strip().replace(",", "").replace(" ", "")
+    gold = gold.strip().replace(",", "").replace(" ", "")
+    if pred == gold:
+        return True
+    try:
+        return float(pred) == float(gold)
+    except ValueError:
+        return False
 
 
 def load_samples(path: str):
@@ -143,8 +155,8 @@ def evaluate(args):
             )
 
         for gen, gold, source, sample in zip(generated, gold_answers, sources, batch):
-            pred = extract_answer(gen).strip()
-            is_correct = pred == gold.strip()
+            pred = extract_answer(gen)
+            is_correct = answers_match(pred, gold)
 
             stats["overall"]["total"] += 1
             stats["overall"]["correct"] += is_correct
@@ -199,7 +211,7 @@ if __name__ == "__main__":
     parser.add_argument("--model_name",   required=True,  help="HF model name or local path")
     parser.add_argument("--eval_file",    required=True,  help="Path to test JSONL")
     parser.add_argument("--batch_size",   type=int, default=8)
-    parser.add_argument("--max_new_tokens", type=int, default=256)
+    parser.add_argument("--max_new_tokens", type=int, default=1024)
     parser.add_argument("--max_prompt_length", type=int, default=1024)
     parser.add_argument("--use_vllm",    action="store_true")
     parser.add_argument("--gpu_memory_utilization", type=float, default=0.85)
