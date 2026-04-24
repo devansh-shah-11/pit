@@ -26,3 +26,9 @@ This is for PIT: Prompt Invariant Training
 python make_paraphrase.py --start-from 1000 --end-at 3000
 ```
 
+4. Generate denoised training samples (test run: first 10 entries)
+```
+python generate_denoised_dataset.py --input usable_dataset/dataset.jsonl --end-to 10 --output dataset/denoised_samples.jsonl
+```
+Use `--start-from` and `--end-to` to process specific index ranges and accumulate results across runs.
+

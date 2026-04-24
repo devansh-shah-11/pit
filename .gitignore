@@ -8,3 +8,5 @@ test.jsonl
 test_ver2.jsonl
 __pycache__
 
+venv/*
+.DS_Store
