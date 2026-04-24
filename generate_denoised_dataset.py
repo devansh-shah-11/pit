@@ -23,12 +23,13 @@ You are a math reasoning expert. You will be given:
 3. An adversarial version of the same question that contains irrelevant noise and distractors
 
 Your task: Produce the correct step-by-step reasoning for the adversarial question. \
-You MUST begin by explicitly listing the irrelevant noise/distractors you are ignoring, \
-then solve using only the mathematically relevant facts. \
+You MUST begin by explicitly listing the irrelevant noise/distractors you are ignoring \
+(wrapped in the noise markers), then solve using only the mathematically relevant facts. \
 The answer must be the same as the original.
 
 Format your response EXACTLY like this:
-Noise identified and ignored: <list the irrelevant facts you are ignoring>
+@%^^ NOISE @%^^
+&&&& <list the irrelevant facts you are ignoring> &&&&
 <reasoning steps>
 #### <ans>
 
