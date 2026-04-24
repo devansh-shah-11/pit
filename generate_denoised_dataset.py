@@ -112,18 +112,13 @@ def call_llm(
 
 
 def make_clean_sample(entry: dict) -> dict:
-    original_question = entry["original_question"]
-    original_answer = entry["original_answer"]
-    original_raw = entry["original_raw"]
-
-    reasoning, answer = parse_raw_response(original_raw)
+    reasoning = entry["reasoning"].strip().replace("\n", " ")
     clean_reasoning = f"No noise identified in the question. {reasoning}"
-    clean_raw = f"{clean_reasoning}\n#### {answer or original_answer}"
+    clean_raw = f"{clean_reasoning}\n#### {entry['answer']}"
 
     return {
-        "question": original_question,
-        "original_question": original_question,
-        "answer": original_answer,
+        "question": entry["question"],
+        "answer": entry["answer"],
         "raw": clean_raw,
         "reasoning": clean_reasoning,
         "type": "clean",
@@ -133,30 +128,30 @@ def make_clean_sample(entry: dict) -> dict:
 
 def make_adversarial_sample(
     entry: dict,
-    adversarial_question: str,
+    original_question: str,
+    original_reasoning: str,
     api_key: str,
     model: str,
     delay: float,
 ) -> dict:
-    original_question = entry["original_question"]
-    original_answer = entry["original_answer"]
-    original_raw = entry["original_raw"]
+    answer = entry["answer"]
+    original_raw = f"{original_reasoning}\n#### {answer}"
 
     prompt = DENOISING_PROMPT.format(
         original_question=original_question,
         original_raw=original_raw,
-        adversarial_question=adversarial_question,
+        adversarial_question=entry["question"],
     )
 
     llm_raw = call_llm(prompt, api_key, model, delay)
     reasoning, extracted_answer = parse_raw_response(llm_raw)
-    answer_match = normalize_answer(extracted_answer) == normalize_answer(original_answer)
-    clean_raw = f"{reasoning}\n#### {original_answer}"
+    answer_match = normalize_answer(extracted_answer) == normalize_answer(answer)
+    clean_raw = f"{reasoning}\n#### {answer}"
 
     return {
-        "question": adversarial_question,
+        "question": entry["question"],
         "original_question": original_question,
-        "answer": original_answer,
+        "answer": answer,
         "raw": clean_raw,
         "reasoning": reasoning,
         "type": "adversarial",
@@ -220,42 +215,58 @@ def generate(args):
     print(f"Processing entries [{start}:{end}] ({len(entries)} entries) from {input_path}")
     print(f"Model: {model}  |  delay: {args.delay}s\n")
 
+    current_original_question = None
+    current_original_reasoning = None
+
     with open(output_path, "a", encoding="utf-8") as f_out:
         for idx, entry in enumerate(entries, start=start + 1):
-            adversarials = entry["modified_questions"]["adverserials"]
+            question = entry["question"]
+            source = entry["source"]
 
-            # --- Clean sample (no LLM) ---
-            clean_q = entry["original_question"]
-            if clean_q in existing_questions:
-                total_skipped += 1
-            else:
-                clean_sample = make_clean_sample(entry)
-                f_out.write(json.dumps(clean_sample) + "\n")
-                f_out.flush()
-                existing_questions.add(clean_q)
-                total_clean += 1
+            if source == "original":
+                current_original_question = question
+                current_original_reasoning = entry["reasoning"]
 
-            # --- One LLM call per adversarial question ---
-            for adv_q in adversarials:
-                if adv_q in existing_questions:
+                if question in existing_questions:
+                    total_skipped += 1
+                else:
+                    sample = make_clean_sample(entry)
+                    f_out.write(json.dumps(sample) + "\n")
+                    f_out.flush()
+                    existing_questions.add(question)
+                    total_clean += 1
+
+            elif source == "adversarial":
+                if current_original_question is None:
+                    print(f"  [WARN] entry {idx}: adversarial with no preceding original, skipping.")
                     total_skipped += 1
                     continue
+
+                if question in existing_questions:
+                    total_skipped += 1
+                    continue
+
                 try:
-                    adv_sample = make_adversarial_sample(
-                        entry, adv_q, api_key, model, args.delay
+                    sample = make_adversarial_sample(
+                        entry,
+                        current_original_question,
+                        current_original_reasoning,
+                        api_key,
+                        model,
+                        args.delay,
                     )
-                    f_out.write(json.dumps(adv_sample) + "\n")
+                    f_out.write(json.dumps(sample) + "\n")
                     f_out.flush()
-                    existing_questions.add(adv_q)
+                    existing_questions.add(question)
                     total_adversarial += 1
-                    if adv_sample["answer_match"]:
+                    if sample["answer_match"]:
                         total_match += 1
                     else:
                         total_mismatch += 1
                         print(
                             f"  [MISMATCH] entry {idx} | "
-                            f"expected={entry['original_answer']} | "
-                            f"llm_raw={adv_sample['llm_raw_response'][:120]!r}"
+                            f"expected={entry['answer']} | "
+                            f"llm_raw={sample['llm_raw_response'][:120]!r}"
                         )
                 except Exception as exc:
                     print(f"  [ERROR] entry {idx}, adversarial skipped: {exc}")
@@ -285,7 +296,7 @@ def main():
     parser = argparse.ArgumentParser(
         description="Generate denoised training data using an external LLM."
     )
-    parser.add_argument("--input", default="test.jsonl")
+    parser.add_argument("--input", default="dataset/train_data.jsonl")
     parser.add_argument("--output", default="dataset/denoised_training.jsonl")
     parser.add_argument("--api-key", default=None)
     parser.add_argument("--model", default=None,
