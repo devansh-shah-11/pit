@@ -15,5 +15,5 @@ load_dotenv
 OpenAI
 trl
 python-dotenv
-
+mlx-lm
 

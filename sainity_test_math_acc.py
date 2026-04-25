@@ -9,7 +9,7 @@ import wandb
 from tqdm import tqdm
 from transformers import AutoModelForCausalLM
 
-from create_adverserial_dataset_test import ask_a_math_question
+from utils.create_adverserial_dataset_test import ask_a_math_question
 from utils.defaults import DEVICE, MODEL_NAME
 
 os.environ["WANDB_API_KEY"] = "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"

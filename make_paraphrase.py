@@ -13,9 +13,7 @@ from utils.defaults import EXTERNAL_LLM
 
 load_dotenv()
 
-from pandas import Flags
-
-from create_adverserial_dataset_test import ask_a_math_question
+from utils.create_adverserial_dataset_test import ask_a_math_question
 
 DEEP_SEEK_API_KEY = str(os.getenv("DEEP_SEEK_API_KEY"))
 
@@ -108,6 +106,8 @@ def make_adverserials_for_one_question(question, answer_ref, limit = 1, max_iter
 
         print("QUESTION ASKED", new_question[:200])
         print("response", response)
+
+        answer_ref = answer_ref.replace(",", "")
 
         if answer is not None:
             print("EXTRACTED ANSWER:", answer, "REFERCE ANSWER:", answer_ref, "SIM:", float(answer) == float(answer_ref))

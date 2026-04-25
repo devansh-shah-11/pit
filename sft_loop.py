@@ -3,7 +3,6 @@
 import argparse
 import json
 import os
-import random
 
 import torch
 import wandb
@@ -13,7 +12,7 @@ from transformers import AutoModelForCausalLM, AutoTokenizer, TrainerCallback
 from trl import SFTTrainer, SFTConfig
 
 from utils.defaults import DEVICE
-from create_adverserial_dataset_test import ask_a_math_question
+from utils.create_adverserial_dataset_test import ask_a_math_question
 
 os.environ["WANDB_API_KEY"] = "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"
 wandb.login(key=os.environ["WANDB_API_KEY"])
