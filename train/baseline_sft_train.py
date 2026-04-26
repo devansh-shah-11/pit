@@ -162,6 +162,7 @@ class AccuracyEvalCallback(TrainerCallback):
             gpu_memory_utilization=0.45,  # ~12GB on A100 40GB; leaves room for training model
             max_model_len=self.max_prompt_length + self.max_new_tokens,
             tensor_parallel_size=1,
+            trust_remote_code=True,
         )
 
     def _generate_vllm(self, prompts):
