@@ -16,4 +16,4 @@ OpenAI
 trl
 python-dotenv
 mlx-lm
-
+matplotlib
