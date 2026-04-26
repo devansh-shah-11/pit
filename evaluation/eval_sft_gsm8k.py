@@ -4,10 +4,15 @@ Reports exact-match accuracy for each model.
 """
 
 import json
+import os
+import sys
 import argparse
 import torch
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from evaluate_sft import build_prompt, extract_answer, answers_match
+from evaluation.evaluate_sft import build_prompt, extract_answer, answers_match
 
 
 def build_chat_prompt(question: str, tokenizer) -> str:

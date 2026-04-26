@@ -48,7 +48,7 @@ singularity exec --bind /scratch --nv \
 
     pip install -q -r $REPO_DIR/requirements.txt
 
-    python $REPO_DIR/baseline_sft_train.py \
+    python $REPO_DIR/train/baseline_sft_train.py \
       --train_file $TRAIN_FILE \
       --eval_file  $EVAL_FILE \
       --model_name $MODEL_NAME \

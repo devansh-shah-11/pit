@@ -1,6 +1,10 @@
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
-import os
 from torch.optim import AdamW
 import random
 from utils.defaults import *

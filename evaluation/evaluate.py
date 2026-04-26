@@ -1,5 +1,9 @@
 """Minimal evaluation script for MATH and Intellect test sets."""
 import logging
+import os
+import sys
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 from collections import defaultdict
 from pathlib import Path
 
@@ -7,7 +11,7 @@ from datasets import load_dataset, load_from_disk
 from tqdm import tqdm
 from vllm import LLM, SamplingParams
 
-from dr_grpo_grader import question_only_reward_fn
+from evaluation.dr_grpo_grader import question_only_reward_fn
 
 
 def setup_logger(log_path: str = "eval.log") -> logging.Logger:

@@ -47,7 +47,7 @@ singularity exec --bind /scratch --nv \
 
     echo ''
     echo '=== [1/2] Adversarial test set — base model (clean + adversarial breakdown) ==='
-    python $REPO_DIR/eval_sft_base_model.py \
+    python $REPO_DIR/evaluation/eval_sft_base_model.py \
       --model_name  $BASE_MODEL \
       --eval_file   $ADV_EVAL_FILE \
       --batch_size  16 \
@@ -59,7 +59,7 @@ singularity exec --bind /scratch --nv \
 
     echo ''
     echo '=== [2/2] Clean GSM8K test set — base vs best checkpoint ==='
-    python $REPO_DIR/eval_sft_gsm8k.py \
+    python $REPO_DIR/evaluation/eval_sft_gsm8k.py \
       --base_model  $BASE_MODEL \
       --best_model  $BEST_MODEL \
       --eval_file   $GSM8K_EVAL_FILE \

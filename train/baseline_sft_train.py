@@ -7,8 +7,11 @@ is saved to {output_dir}/best and the final model to {output_dir}/final.
 
 import json
 import os
+import sys
 import random
 import argparse
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import torch
 from torch.utils.data import Dataset
@@ -19,7 +22,7 @@ from transformers import (
     Trainer,
     TrainerCallback,
 )
-from evaluate_sft import build_prompt, extract_answer, answers_match
+from evaluation.evaluate_sft import build_prompt, extract_answer, answers_match
 
 
 def causal_lm_collator(pad_token_id):
