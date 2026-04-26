@@ -185,9 +185,12 @@ class AccuracyEvalCallback(TrainerCallback):
                 destroy_model_parallel()
                 del self._vllm
                 self._vllm = None
-                import gc
-                gc.collect()
-                torch.cuda.empty_cache()
+            # Free the GPU so vLLM can allocate its own weights + KV cache.
+            model.to("cpu")
+            import gc
+            gc.collect()
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
             self._init_vllm(tmp_dir)
 
         stats = {
@@ -259,6 +262,9 @@ class AccuracyEvalCallback(TrainerCallback):
             self._vllm = None
             import gc
             gc.collect()
+            torch.cuda.synchronize()
+            torch.cuda.empty_cache()
+            model.to(device)
 
         torch.cuda.synchronize()
         torch.cuda.empty_cache()
