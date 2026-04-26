@@ -67,8 +67,20 @@ class NoiseCOTDataset(Dataset):
         if shuffle:
             random.shuffle(self.samples)
 
+        # Filter out samples whose full tokenized length exceeds max_length.
+        # These would lose their answer label to truncation (answer sits at end of sequence).
+        before = len(self.samples)
+        self.samples = [
+            s for s in self.samples
+            if len(tokenizer(
+                build_prompt(s["question"]) + "\n" + s["raw"],
+                add_special_tokens=True
+            )["input_ids"]) <= max_length
+        ]
         subset = "clean-only" if clean_only else "all"
-        print(f"Loaded {len(self.samples)} training samples ({subset}) from {path}")
+        print(f"Loaded {len(self.samples)} training samples ({subset}) from {path} "
+              f"({before - len(self.samples)} filtered for exceeding max_length={max_length})")
+
 
     def __len__(self):
         return len(self.samples)
