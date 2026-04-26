@@ -19,6 +19,7 @@ from transformers import (
     Trainer,
     TrainerCallback,
 )
+from evaluate_sft import build_prompt, extract_answer, answers_match
 
 
 def causal_lm_collator(pad_token_id):
@@ -38,29 +39,7 @@ def causal_lm_collator(pad_token_id):
     return collate
 
 
-PROMPT_TEMPLATE = """Solve this math problem step by step:
-
-{question}
-
-Provide your final answer in the format:
-[reasoning steps]
-####
-[final answer (just the number)]"""
-
 COMPLETION_TEMPLATE = "{reasoning}\n####\n{answer}"
-
-
-def extract_answer(text: str) -> str:
-    """Pull the line immediately after the last #### marker."""
-    parts = text.split("####")
-    if len(parts) < 2:
-        return ""
-    # answer is the first non-empty line after ####
-    for line in parts[-1].splitlines():
-        line = line.strip()
-        if line:
-            return line
-    return ""
 
 
 class PITDataset(Dataset):
@@ -84,7 +63,7 @@ class PITDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
 
-        prompt = PROMPT_TEMPLATE.format(question=sample["question"])
+        prompt = build_prompt(sample["question"])
         completion = COMPLETION_TEMPLATE.format(
             reasoning=sample["reasoning"],
             answer=sample["answer"],
@@ -216,7 +195,7 @@ class AccuracyEvalCallback(TrainerCallback):
             batch_samples = [self.eval_dataset.samples[i]
                              for i in range(start, min(start + self.batch_size, len(self.eval_dataset)))]
 
-            prompts      = [PROMPT_TEMPLATE.format(question=s["question"]) for s in batch_samples]
+            prompts      = [build_prompt(s["question"]) for s in batch_samples]
             gold_answers = [s["answer"] for s in batch_samples]
             sources      = [s.get("source", "original") for s in batch_samples]
 
@@ -226,7 +205,7 @@ class AccuracyEvalCallback(TrainerCallback):
                 generated_texts = self._generate_transformers(prompts, model, device)
 
             for gen, gold, source in zip(generated_texts, gold_answers, sources):
-                is_correct = extract_answer(gen).strip() == gold.strip()
+                is_correct = answers_match(extract_answer(gen), gold)
                 stats["overall"]["total"] += 1
                 stats["overall"]["correct"] += is_correct
                 src_key = "adversarial" if source == "adversarial" else "original"

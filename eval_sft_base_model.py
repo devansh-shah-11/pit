@@ -3,48 +3,17 @@ Evaluate a model (base or fine-tuned) on test data.
 Reports clean (original), adversarial, and overall exact-match accuracy.
 """
 
-import re
 import json
 import argparse
 import torch
 from transformers import AutoTokenizer, AutoModelForCausalLM
-
-PROMPT_TEMPLATE = """Solve this math problem step by step:
-
-{question}
-
-Provide your final answer in the format:
-[reasoning steps]
-####
-[final answer (just the number)]"""
+from evaluate_sft import build_prompt, extract_answer, answers_match
 
 
 def build_chat_prompt(question: str, tokenizer) -> str:
-    """Wrap PROMPT_TEMPLATE in the model's chat format so instruct models respond correctly."""
-    messages = [{"role": "user", "content": PROMPT_TEMPLATE.format(question=question)}]
+    """Wrap build_prompt in the model's chat format so instruct models respond correctly."""
+    messages = [{"role": "user", "content": build_prompt(question)}]
     return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
-
-
-def extract_answer(text: str) -> str:
-    if "####" in text:
-        answer_part = text.split("####")[-1].strip()
-        numbers = re.findall(r"-?\d+\.?\d*", answer_part)
-        if numbers:
-            return numbers[0]
-    # fallback: last number anywhere in the output
-    numbers = re.findall(r"-?\d+\.?\d*", text)
-    return numbers[-1] if numbers else ""
-
-
-def answers_match(pred: str, gold: str) -> bool:
-    pred = pred.strip().replace(",", "").replace(" ", "")
-    gold = gold.strip().replace(",", "").replace(" ", "")
-    if pred == gold:
-        return True
-    try:
-        return float(pred) == float(gold)
-    except ValueError:
-        return False
 
 
 def load_samples(path: str):
