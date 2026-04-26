@@ -123,7 +123,7 @@ def evaluate(args):
         batch = samples[start: start + args.batch_size]
         prompts      = [build_chat_prompt(s["question"], tokenizer) for s in batch]
         gold_answers = [s["answer"] for s in batch]
-        sources      = [s.get("source", "original") for s in batch]
+        sources      = [s.get("source") or s.get("type", "original") for s in batch]
 
         if args.use_vllm:
             generated = generate_vllm(prompts, llm, args.max_new_tokens, tokenizer, args.max_prompt_length)
