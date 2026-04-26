@@ -343,7 +343,7 @@ def main(args):
             eval_dataset=eval_dataset,
             tokenizer=tokenizer,
             output_dir=args.output_dir,
-            max_new_tokens=256,
+            max_new_tokens=1024,
             batch_size=args.batch_size,
             max_prompt_length=args.max_length,
             use_vllm=args.use_vllm,
