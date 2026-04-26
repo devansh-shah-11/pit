@@ -4,6 +4,7 @@ SFT training on the noise-CoT dataset (dataset/noise_cot_train.jsonl).
 Each sample has fields: question, answer, reasoning, type ("clean" | "adversarial").
 
 --clean_only  : train on clean samples only (type == "clean")
+--noise_only  : train on adversarial samples only (type == "adversarial")
 (default)     : train on all samples (clean + adversarial)
 
 Evaluation always loads all samples from the eval file and reports
@@ -49,7 +50,10 @@ def causal_lm_collator(pad_token_id):
 
 class NoiseCOTDataset(Dataset):
     def __init__(self, path: str, tokenizer, max_length: int = 768,
-                 clean_only: bool = False, shuffle: bool = True):
+                 clean_only: bool = False, noise_only: bool = False,
+                 shuffle: bool = True):
+        if clean_only and noise_only:
+            raise ValueError("clean_only and noise_only are mutually exclusive")
         self.tokenizer = tokenizer
         self.max_length = max_length
         self.samples = []
@@ -61,6 +65,8 @@ class NoiseCOTDataset(Dataset):
                     continue
                 sample = json.loads(line)
                 if clean_only and sample.get("type") != "clean":
+                    continue
+                if noise_only and sample.get("type") != "adversarial":
                     continue
                 self.samples.append(sample)
 
@@ -77,7 +83,7 @@ class NoiseCOTDataset(Dataset):
                 add_special_tokens=True
             )["input_ids"]) <= max_length
         ]
-        subset = "clean-only" if clean_only else "all"
+        subset = "clean-only" if clean_only else ("noise-only" if noise_only else "all")
         print(f"Loaded {len(self.samples)} training samples ({subset}) from {path} "
               f"({before - len(self.samples)} filtered for exceeding max_length={max_length})")
 
@@ -307,6 +313,7 @@ def main(args):
         args.train_file, tokenizer,
         max_length=args.max_length,
         clean_only=args.clean_only,
+        noise_only=args.noise_only,
     )
     eval_dataset = NoiseCOTDataset(
         args.eval_file, tokenizer,
@@ -330,7 +337,7 @@ def main(args):
         save_strategy="no",
         load_best_model_at_end=False,
         report_to="wandb" if args.use_wandb else "none",
-        run_name=f"pit-noise-cot-{'clean' if args.clean_only else 'all'}-{args.model_name.split('/')[-1]}",
+        run_name=f"pit-noise-cot-{'clean' if args.clean_only else ('noise' if args.noise_only else 'all')}-{args.model_name.split('/')[-1]}",
         dataloader_num_workers=2,
     )
 
@@ -386,6 +393,8 @@ if __name__ == "__main__":
     parser.add_argument("--output_dir", default="checkpoints/pit_noise_cot")
     parser.add_argument("--clean_only", action="store_true",
                         help="Train on clean samples only (type=='clean'); eval always uses all samples")
+    parser.add_argument("--noise_only", action="store_true",
+                        help="Train on adversarial samples only (type=='adversarial'); eval always uses all samples")
     parser.add_argument("--epochs",     type=int,   default=3)
     parser.add_argument("--batch_size", type=int,   default=4)
     parser.add_argument("--grad_accum", type=int,   default=4)
