@@ -103,6 +103,10 @@ def evaluate_model(model_path, samples, args, device):
         destroy_model_parallel()
         del llm
         import gc; gc.collect()
+        # Do NOT call torch.cuda.empty_cache() here — it initializes CUDA in
+        # the parent process, which makes the *next* LLM() call's fork fail
+        # with "Cannot re-initialize CUDA in forked subprocess".
+    else:
         torch.cuda.empty_cache()
 
     return correct / total if total > 0 else 0.0, correct, total, results
@@ -112,7 +116,10 @@ def main(args):
     samples = load_samples(args.eval_file)
     print(f"Loaded {len(samples)} samples from {args.eval_file}\n")
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    # Only touch CUDA from the parent if we actually need an HF device handle.
+    # With --use_vllm, vLLM runs in its own subprocess and the parent must
+    # stay CUDA-uninitialized so each LLM() call can fork cleanly.
+    device = None if args.use_vllm else ("cuda" if torch.cuda.is_available() else "cpu")
 
     print(f"=== Evaluating BASE MODEL: {args.base_model} ===")
     base_acc, base_correct, base_total, base_results = evaluate_model(args.base_model, samples, args, device)
