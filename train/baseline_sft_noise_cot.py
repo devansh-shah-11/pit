@@ -79,7 +79,7 @@ class NoiseCOTDataset(Dataset):
         self.samples = [
             s for s in self.samples
             if len(tokenizer(
-                build_prompt(s["question"]) + "\n" + s["raw"],
+                build_prompt(s["question"]) + "\n" + s["raw"] + tokenizer.eos_token,
                 add_special_tokens=True
             )["input_ids"]) <= max_length
         ]
@@ -95,8 +95,10 @@ class NoiseCOTDataset(Dataset):
         sample = self.samples[idx]
 
         prompt = build_prompt(sample["question"])
-        # "raw" is the full model output: reasoning + #### + answer
-        completion = sample["raw"]
+        # "raw" is the full model output: reasoning + #### + answer.
+        # Append EOS so the model learns to stop after the answer; otherwise
+        # generation runs until max_new_tokens and emits multiple "####" blocks.
+        completion = sample["raw"] + self.tokenizer.eos_token
         full_text = prompt + "\n" + completion
 
         full_enc = self.tokenizer(
