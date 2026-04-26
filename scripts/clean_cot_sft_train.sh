@@ -48,8 +48,6 @@ singularity exec --bind /scratch --nv \
     export PATH=/home/dns5508/.local/bin:\$PATH
     conda activate llmr
 
-    pip install -q -r $REPO_DIR/requirements.txt
-
     python $REPO_DIR/train/baseline_sft_noise_cot.py \
       --train_file $TRAIN_FILE \
       --eval_file  $EVAL_FILE \
