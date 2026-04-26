@@ -22,6 +22,11 @@ def build_chat_prompt(question: str, tokenizer) -> str:
 
 
 def load_samples(path: str):
+    # .json = single JSON array (e.g., gsm8k_processed_test.json)
+    # .jsonl = one JSON object per line (e.g., noise_cot_test.jsonl)
+    if path.endswith(".json"):
+        with open(path, "r", encoding="utf-8") as f:
+            return json.load(f)
     samples = []
     with open(path, "r", encoding="utf-8") as f:
         for line in f:

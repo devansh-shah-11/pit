@@ -41,7 +41,7 @@ singularity exec --bind /scratch --nv \
     export PATH=/home/dns5508/.local/bin:\$PATH
     conda activate llmr
 
-    # ── [1/6] Base model on noise_cot_test (clean + adversarial breakdown) ────
+    # ── [1/6] Base model — noise_cot_test ─────────────────────────────────────
     echo ''
     echo '=== [1/6] Base model — noise_cot_test ==='
     python $REPO_DIR/evaluation/eval_sft_base_model.py \
@@ -54,7 +54,7 @@ singularity exec --bind /scratch --nv \
       --output_file $RESULTS_DIR/base_noise_cot_test.json \
       --use_vllm
 
-    # ── [2/6] Noise-CoT clean model on noise_cot_test ─────────────────────────
+    # ── [2/6] Noise-CoT clean model — noise_cot_test ──────────────────────────
     echo ''
     echo '=== [2/6] Noise-CoT clean model — noise_cot_test ==='
     python $REPO_DIR/evaluation/eval_sft_base_model.py \
@@ -67,7 +67,7 @@ singularity exec --bind /scratch --nv \
       --output_file $RESULTS_DIR/clean_model_noise_cot_test.json \
       --use_vllm
 
-    # ── [3/6] Noise-CoT all model on noise_cot_test ───────────────────────────
+    # ── [3/6] Noise-CoT all model — noise_cot_test ────────────────────────────
     echo ''
     echo '=== [3/6] Noise-CoT all model — noise_cot_test ==='
     python $REPO_DIR/evaluation/eval_sft_base_model.py \
@@ -80,12 +80,11 @@ singularity exec --bind /scratch --nv \
       --output_file $RESULTS_DIR/all_model_noise_cot_test.json \
       --use_vllm
 
-    # ── [4/6] Base model on GSM8K ─────────────────────────────────────────────
+    # ── [4/6] Base model — GSM8K ──────────────────────────────────────────────
     echo ''
     echo '=== [4/6] Base model — GSM8K ==='
-    python $REPO_DIR/evaluation/eval_sft_gsm8k.py \
-      --base_model  $BASE_MODEL \
-      --best_model  $BASE_MODEL \
+    python $REPO_DIR/evaluation/eval_sft_base_model.py \
+      --model_name  $BASE_MODEL \
       --eval_file   $GSM8K_TEST \
       --batch_size  16 \
       --max_new_tokens 512 \
@@ -94,12 +93,11 @@ singularity exec --bind /scratch --nv \
       --output_file $RESULTS_DIR/base_gsm8k.json \
       --use_vllm
 
-    # ── [5/6] Noise-CoT clean model on GSM8K ─────────────────────────────────
+    # ── [5/6] Noise-CoT clean model — GSM8K ───────────────────────────────────
     echo ''
     echo '=== [5/6] Noise-CoT clean model — GSM8K ==='
-    python $REPO_DIR/evaluation/eval_sft_gsm8k.py \
-      --base_model  $BASE_MODEL \
-      --best_model  $CLEAN_MODEL \
+    python $REPO_DIR/evaluation/eval_sft_base_model.py \
+      --model_name  $CLEAN_MODEL \
       --eval_file   $GSM8K_TEST \
       --batch_size  16 \
       --max_new_tokens 512 \
@@ -108,12 +106,11 @@ singularity exec --bind /scratch --nv \
       --output_file $RESULTS_DIR/clean_model_gsm8k.json \
       --use_vllm
 
-    # ── [6/6] Noise-CoT all model on GSM8K ───────────────────────────────────
+    # ── [6/6] Noise-CoT all model — GSM8K ─────────────────────────────────────
     echo ''
     echo '=== [6/6] Noise-CoT all model — GSM8K ==='
-    python $REPO_DIR/evaluation/eval_sft_gsm8k.py \
-      --base_model  $BASE_MODEL \
-      --best_model  $ALL_MODEL \
+    python $REPO_DIR/evaluation/eval_sft_base_model.py \
+      --model_name  $ALL_MODEL \
       --eval_file   $GSM8K_TEST \
       --batch_size  16 \
       --max_new_tokens 512 \
