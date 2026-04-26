@@ -8,8 +8,12 @@ Usage:
 
 import argparse
 import json
+import os
+import sys
 
-from make_paraphrase import make_adverserials_for_one_question
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from data.make_paraphrase import make_adverserials_for_one_question
 
 
 def main():

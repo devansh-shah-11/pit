@@ -4,9 +4,12 @@ import argparse
 import json
 import os
 import re
+import sys
 import time
 import unicodedata
 from pathlib import Path
+
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 import requests
 

@@ -1,6 +1,10 @@
+import os
+import sys
 import time
 
-from make_paraphrase import make_story_by_calling_genai
+sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
+
+from data.make_paraphrase import make_story_by_calling_genai
 
 prompt = "hello"
 # history = [{
