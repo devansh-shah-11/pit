@@ -25,9 +25,9 @@ LR=2e-5
 EVAL_STEPS=10
 # ──────────────────────────────────────────────────────────────────────────────
 
-# 2 configs: layers 18-20 (all), layers 24-26 (all)
-LAYER_SETS=("18,19,20" "24,25,26")
-SUFFIXES=(  "18-20_all" "24-26_all")
+# 2 configs: layers 18-20 (all), layers 23-27 (all)
+LAYER_SETS=("18,19,20" "23,24,25,26,27")
+SUFFIXES=("18-20_all" "23-27_all")
 
 LAYERS="${LAYER_SETS[$SLURM_ARRAY_TASK_ID]}"
 SUFFIX="${SUFFIXES[$SLURM_ARRAY_TASK_ID]}"
