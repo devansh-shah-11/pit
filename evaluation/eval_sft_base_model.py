@@ -121,7 +121,12 @@ def evaluate(args):
 
     for start in range(0, len(samples), args.batch_size):
         batch = samples[start: start + args.batch_size]
-        prompts      = [build_chat_prompt(s["question"], tokenizer) for s in batch]
+        # Base instruct model expects its chat template; fine-tuned models were
+        # trained on plain build_prompt (no chat wrap) — see baseline_sft_*.py.
+        if args.use_chat_template:
+            prompts = [build_chat_prompt(s["question"], tokenizer) for s in batch]
+        else:
+            prompts = [build_prompt(s["question"]) for s in batch]
         gold_answers = [s["answer"] for s in batch]
         sources      = [s.get("source") or s.get("type", "original") for s in batch]
 
@@ -193,6 +198,8 @@ if __name__ == "__main__":
     parser.add_argument("--max_new_tokens", type=int, default=1024)
     parser.add_argument("--max_prompt_length", type=int, default=1024)
     parser.add_argument("--use_vllm",    action="store_true")
+    parser.add_argument("--use_chat_template", action="store_true",
+                        help="Wrap prompts in the model's chat template (use for base instruct models; omit for fine-tuned models that were trained on plain build_prompt format).")
     parser.add_argument("--gpu_memory_utilization", type=float, default=0.85)
     parser.add_argument("--cache_dir",   default=None)
     parser.add_argument("--output_file", default=None, help="Save JSON results here")

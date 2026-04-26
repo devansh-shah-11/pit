@@ -42,17 +42,19 @@ singularity exec --bind /scratch --nv \
     conda activate llmr
 
     # ── [1/6] Base model — noise_cot_test ─────────────────────────────────────
-    echo ''
-    echo '=== [1/6] Base model — noise_cot_test ==='
-    python $REPO_DIR/evaluation/eval_sft_base_model.py \
-      --model_name  $BASE_MODEL \
-      --eval_file   $NOISE_COT_TEST \
-      --batch_size  16 \
-      --max_new_tokens 512 \
-      --max_prompt_length 1024 \
-      --gpu_memory_utilization 0.85 \
-      --output_file $RESULTS_DIR/base_noise_cot_test.json \
-      --use_vllm
+    # Base model: use chat template (it's an instruct model).
+    # echo ''
+    # echo '=== [1/6] Base model — noise_cot_test ==='
+    # python $REPO_DIR/evaluation/eval_sft_base_model.py \
+    #   --model_name  $BASE_MODEL \
+    #   --eval_file   $NOISE_COT_TEST \
+    #   --batch_size  16 \
+    #   --max_new_tokens 512 \
+    #   --max_prompt_length 1024 \
+    #   --gpu_memory_utilization 0.85 \
+    #   --output_file $RESULTS_DIR/base_noise_cot_test.json \
+    #   --use_vllm \
+    #   --use_chat_template
 
     # ── [2/6] Noise-CoT clean model — noise_cot_test ──────────────────────────
     echo ''
@@ -81,17 +83,19 @@ singularity exec --bind /scratch --nv \
       --use_vllm
 
     # ── [4/6] Base model — GSM8K ──────────────────────────────────────────────
-    echo ''
-    echo '=== [4/6] Base model — GSM8K ==='
-    python $REPO_DIR/evaluation/eval_sft_base_model.py \
-      --model_name  $BASE_MODEL \
-      --eval_file   $GSM8K_TEST \
-      --batch_size  16 \
-      --max_new_tokens 512 \
-      --max_prompt_length 1024 \
-      --gpu_memory_utilization 0.85 \
-      --output_file $RESULTS_DIR/base_gsm8k.json \
-      --use_vllm
+    # Base model: use chat template (it's an instruct model).
+    # echo ''
+    # echo '=== [4/6] Base model — GSM8K ==='
+    # python $REPO_DIR/evaluation/eval_sft_base_model.py \
+    #   --model_name  $BASE_MODEL \
+    #   --eval_file   $GSM8K_TEST \
+    #   --batch_size  16 \
+    #   --max_new_tokens 512 \
+    #   --max_prompt_length 1024 \
+    #   --gpu_memory_utilization 0.85 \
+    #   --output_file $RESULTS_DIR/base_gsm8k.json \
+    #   --use_vllm \
+    #   --use_chat_template
 
     # ── [5/6] Noise-CoT clean model — GSM8K ───────────────────────────────────
     echo ''
