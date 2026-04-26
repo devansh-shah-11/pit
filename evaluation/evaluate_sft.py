@@ -85,6 +85,17 @@ def answers_match(pred: Optional[str], ref) -> bool:
 
 @torch.no_grad()
 def run_inference(model, tokenizer, question: str, device: str,
+                  max_new_tokens: int = 256):
+    prompt = build_prompt(question)
+    inputs = tokenizer(prompt, return_tensors="pt").to(device)
+    outputs = model.generate(
+        **inputs,
+        max_new_tokens=max_new_tokens,
+        do_sample=False,
+        pad_token_id=tokenizer.eos_token_id,
+    )
+    response = tokenizer.decode(outputs[0][inputs["input_ids"].shape[1]:], skip_special_tokens=True)
+    answer = extract_answer(response)
     return response, answer
 
 
