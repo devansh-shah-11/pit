@@ -17,13 +17,13 @@ EVAL_FILE="$REPO_DIR/dataset/noise_cot_test.jsonl"
 MODEL_NAME="jahyungu/Qwen2.5-1.5B-Instruct_gsm8k"
 OUTPUT_DIR="$REPO_DIR/checkpoints/pit_noise_cot_noise_only"
 
-# ~150 train rows, effective batch = BATCH_SIZE * GRAD_ACCUM = 2 * 16 = 32
+# ~200 train rows, effective batch = BATCH_SIZE * GRAD_ACCUM = 2 * 16 = 32
 # => ~6 steps/epoch; 10 epochs = ~60 steps total; eval every 10 steps
-EPOCHS=10
+EPOCHS=5
 BATCH_SIZE=2
 GRAD_ACCUM=16
 MAX_LENGTH=1024
-LR=2e-5
+LR=5e-6
 EVAL_STEPS=10
 # ──────────────────────────────────────────────────────────────────────────────
 
@@ -59,7 +59,6 @@ singularity exec --bind /scratch --nv \
       --lr         $LR \
       --output_dir $OUTPUT_DIR \
       --eval_steps $EVAL_STEPS \
-      --noise_only \
       --use_wandb \
       --use_vllm
   "
