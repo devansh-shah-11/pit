@@ -47,6 +47,44 @@ from train.baseline_sft_noise_cot import (
 )
 
 
+class LoRAAccuracyEvalCallback(AccuracyEvalCallback):
+    """
+    AccuracyEvalCallback variant for PEFT/LoRA models. The parent writes the
+    live model with `save_pretrained` before spinning up vLLM, but on a PEFT
+    model that only emits adapter weights — vLLM then fails because there is
+    no config.json. Here we merge the adapter into a copy of the base model
+    and save the full merged model to `_vllm_tmp`, then defer to the parent
+    for the rest of the eval flow. The 'best' / final adapter saves remain
+    adapter-only (handled by the parent path / main()).
+    """
+
+    def on_evaluate(self, args, state, control, model, **kwargs):
+        if not self.use_vllm:
+            return super().on_evaluate(args, state, control, model, **kwargs)
+
+        # Reversibly merge the LoRA delta into the base weights so the saved
+        # checkpoint has a config.json + full base+delta tensors that vLLM
+        # can load. After eval we unmerge so training resumes with the
+        # adapter parameters intact and trainable.
+        tmp_dir = os.path.join(self.output_dir, "_vllm_tmp")
+        model.merge_adapter()
+        try:
+            base = model.get_base_model()
+            base.save_pretrained(tmp_dir)
+            self.tokenizer.save_pretrained(tmp_dir)
+        finally:
+            model.unmerge_adapter()
+
+        # Prevent the parent's save_pretrained call from overwriting our
+        # merged dir with adapter-only weights.
+        original_save = model.save_pretrained
+        model.save_pretrained = lambda *a, **kw: None
+        try:
+            super().on_evaluate(args, state, control, model, **kwargs)
+        finally:
+            model.save_pretrained = original_save
+
+
 LORA_PRESETS = {
     "small": {
         "lora_r": 8,
@@ -150,7 +188,7 @@ def main(args):
     callbacks = []
     accuracy_callback = None
     if eval_dataset is not None:
-        accuracy_callback = AccuracyEvalCallback(
+        accuracy_callback = LoRAAccuracyEvalCallback(
             eval_dataset=eval_dataset,
             tokenizer=tokenizer,
             output_dir=args.output_dir,
