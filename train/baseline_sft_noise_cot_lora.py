@@ -62,18 +62,21 @@ class LoRAAccuracyEvalCallback(AccuracyEvalCallback):
         if not self.use_vllm:
             return super().on_evaluate(args, state, control, model, **kwargs)
 
-        # Reversibly merge the LoRA delta into the base weights so the saved
-        # checkpoint has a config.json + full base+delta tensors that vLLM
-        # can load. After eval we unmerge so training resumes with the
-        # adapter parameters intact and trainable.
+        # Build a fresh merged copy on CPU so the live training weights are
+        # never mutated. Repeated in-place merge/unmerge in bf16 accumulates
+        # round-trip error across eval steps; deepcopy + merge_and_unload
+        # avoids touching the trainable adapter at all.
+        import copy
         tmp_dir = os.path.join(self.output_dir, "_vllm_tmp")
-        model.merge_adapter()
-        try:
-            base = model.get_base_model()
-            base.save_pretrained(tmp_dir)
+        with torch.no_grad():
+            merged = copy.deepcopy(model).to("cpu")
+            merged = merged.merge_and_unload()
+            merged.save_pretrained(tmp_dir)
             self.tokenizer.save_pretrained(tmp_dir)
-        finally:
-            model.unmerge_adapter()
+            del merged
+        import gc
+        gc.collect()
+        torch.cuda.empty_cache()
 
         # Prevent the parent's save_pretrained call from overwriting our
         # merged dir with adapter-only weights.
@@ -176,8 +179,12 @@ def main(args):
         logging_steps=1,
         eval_strategy="steps" if eval_dataset else "no",
         eval_steps=args.eval_steps if eval_dataset else None,
-        save_strategy="no",
-        load_best_model_at_end=False,
+        save_strategy="steps" if eval_dataset else "no",
+        save_steps=args.eval_steps if eval_dataset else None,
+        save_total_limit=2,
+        load_best_model_at_end=bool(eval_dataset),
+        metric_for_best_model="eval_accuracy" if eval_dataset else None,
+        greater_is_better=True,
         report_to="wandb" if args.use_wandb else "none",
         run_name=f"pit-lora-{args.config}-{run_subset}-{args.model_name.split('/')[-1]}",
         dataloader_num_workers=2,
@@ -213,11 +220,13 @@ def main(args):
 
     trainer.train()
 
+    # With load_best_model_at_end=True, the trainer has restored the best
+    # adapter weights into `model` before this save.
     final_dir = os.path.join(args.output_dir, "final")
     # PEFT save_pretrained writes only the adapter weights.
     model.save_pretrained(final_dir)
     tokenizer.save_pretrained(final_dir)
-    print(f"Final LoRA adapter saved to {final_dir}")
+    print(f"Final (best-by-accuracy) LoRA adapter saved to {final_dir}")
 
     if args.merge_and_save:
         merged_dir = os.path.join(args.output_dir, "final_merged")

@@ -52,6 +52,12 @@ def build_prompt(question: str) -> str:
     )
 
 
+def build_chat_prompt(question: str, tokenizer) -> str:
+    """Wrap build_prompt in the model's chat format so instruct models respond correctly."""
+    messages = [{"role": "user", "content": build_prompt(question)}]
+    return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+
+
 
 def safe_float(val) -> Optional[float]:
     try:

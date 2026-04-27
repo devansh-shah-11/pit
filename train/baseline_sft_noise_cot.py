@@ -28,7 +28,7 @@ from transformers import (
     Trainer,
     TrainerCallback,
 )
-from evaluation.evaluate_sft import build_prompt, extract_answer, answers_match
+from evaluation.evaluate_sft import build_prompt, build_chat_prompt, extract_answer, answers_match
 
 
 def causal_lm_collator(pad_token_id):
@@ -76,13 +76,13 @@ class NoiseCOTDataset(Dataset):
         # Filter out samples whose full tokenized length exceeds max_length.
         # These would lose their answer label to truncation (answer sits at end of sequence).
         before = len(self.samples)
-        self.samples = [
-            s for s in self.samples
-            if len(tokenizer(
-                build_prompt(s["question"]) + "\n" + s["raw"] + tokenizer.eos_token,
-                add_special_tokens=True
-            )["input_ids"]) <= max_length
-        ]
+        def _tok_len(s):
+            prompt = build_chat_prompt(s["question"], tokenizer)
+            return len(tokenizer(
+                prompt + s["raw"] + tokenizer.eos_token,
+                add_special_tokens=False,
+            )["input_ids"])
+        self.samples = [s for s in self.samples if _tok_len(s) <= max_length]
         subset = "clean-only" if clean_only else ("noise-only" if noise_only else "all")
         print(f"Loaded {len(self.samples)} training samples ({subset}) from {path} "
               f"({before - len(self.samples)} filtered for exceeding max_length={max_length})")
@@ -94,12 +94,12 @@ class NoiseCOTDataset(Dataset):
     def __getitem__(self, idx):
         sample = self.samples[idx]
 
-        prompt = build_prompt(sample["question"])
+        prompt = build_chat_prompt(sample["question"], self.tokenizer)
         # "raw" is the full model output: reasoning + #### + answer.
         # Append EOS so the model learns to stop after the answer; otherwise
         # generation runs until max_new_tokens and emits multiple "####" blocks.
         completion = sample["raw"] + self.tokenizer.eos_token
-        full_text = prompt + "\n" + completion
+        full_text = prompt + completion
 
         full_enc = self.tokenizer(
             full_text,
@@ -107,20 +107,17 @@ class NoiseCOTDataset(Dataset):
             max_length=self.max_length,
             return_tensors="pt",
         )
-        # add_special_tokens=False avoids a double BOS when full text already has one.
         prompt_enc = self.tokenizer(
-            prompt + "\n",
+            prompt,
             truncation=True,
             max_length=self.max_length,
-            add_special_tokens=False,
             return_tensors="pt",
         )
 
         input_ids = full_enc["input_ids"].squeeze(0).tolist()
         attention_mask = full_enc["attention_mask"].squeeze(0).tolist()
 
-        # +1 accounts for the BOS token prepended by the full-text tokenization.
-        prompt_len = min(prompt_enc["input_ids"].shape[1] + 1, len(input_ids))
+        prompt_len = min(prompt_enc["input_ids"].shape[1], len(input_ids))
         labels = [-100] * prompt_len + input_ids[prompt_len:]
 
         return {
@@ -197,7 +194,7 @@ class AccuracyEvalCallback(TrainerCallback):
         results = self._vllm.generate(prompts, params)
         return [r.outputs[0].text for r in results]
 
-    def on_evaluate(self, args, state, control, model, **kwargs):
+    def on_evaluate(self, args, state, control, model, metrics=None, **kwargs):
         model.eval()
         device = next(model.parameters()).device
 
@@ -228,7 +225,7 @@ class AccuracyEvalCallback(TrainerCallback):
             batch_samples = [self.eval_dataset.samples[i]
                              for i in range(start, min(start + self.batch_size, len(self.eval_dataset)))]
 
-            prompts      = [build_prompt(s["question"]) for s in batch_samples]
+            prompts      = [build_chat_prompt(s["question"], self.tokenizer) for s in batch_samples]
             gold_answers = [s["answer"] for s in batch_samples]
             # noise_cot data uses "type"; fall back to "source" for older formats
             types        = [s.get("type") or s.get("source", "clean") for s in batch_samples]
@@ -260,6 +257,13 @@ class AccuracyEvalCallback(TrainerCallback):
             f"  Adversarial: {adv_acc:.4f}  ({stats['adversarial']['correct']}/{stats['adversarial']['total']})"
         )
 
+        # Inject into the metrics dict the Trainer is holding so that
+        # `metric_for_best_model="eval_accuracy"` (load_best_model_at_end) sees it.
+        if metrics is not None:
+            metrics["eval_accuracy"]             = overall_acc
+            metrics["eval_accuracy_clean"]       = clean_acc
+            metrics["eval_accuracy_adversarial"] = adv_acc
+
         if hasattr(self, "_trainer"):
             self._trainer.log({
                 "eval_accuracy":             overall_acc,
@@ -270,16 +274,6 @@ class AccuracyEvalCallback(TrainerCallback):
 
         if overall_acc > self.best_accuracy:
             self.best_accuracy = overall_acc
-            print(f"[AccuracyEval] New best accuracy={overall_acc:.4f} — saving to {self.best_dir}")
-            model.save_pretrained(self.best_dir)
-            self.tokenizer.save_pretrained(self.best_dir)
-            with open(os.path.join(self.best_dir, "best_info.json"), "w") as f:
-                json.dump({
-                    "step":                state.global_step,
-                    "accuracy":            overall_acc,
-                    "accuracy_clean":      clean_acc,
-                    "accuracy_adversarial": adv_acc,
-                }, f, indent=2)
 
         if self.use_vllm and self._vllm is not None:
             from vllm.distributed.parallel_state import destroy_model_parallel
@@ -336,8 +330,12 @@ def main(args):
         logging_steps=1,
         eval_strategy="steps" if eval_dataset else "no",
         eval_steps=args.eval_steps if eval_dataset else None,
-        save_strategy="no",
-        load_best_model_at_end=False,
+        save_strategy="steps" if eval_dataset else "no",
+        save_steps=args.eval_steps if eval_dataset else None,
+        save_total_limit=2,
+        load_best_model_at_end=bool(eval_dataset),
+        metric_for_best_model="eval_accuracy" if eval_dataset else None,
+        greater_is_better=True,
         report_to="wandb" if args.use_wandb else "none",
         run_name=f"pit-noise-cot-{'clean' if args.clean_only else ('noise' if args.noise_only else 'all')}-{args.model_name.split('/')[-1]}",
         dataloader_num_workers=2,
@@ -374,17 +372,12 @@ def main(args):
 
     trainer.train()
 
+    # With load_best_model_at_end=True, the trainer has already restored the
+    # best-by-eval_accuracy checkpoint into `model` before this save.
     final_dir = os.path.join(args.output_dir, "final")
     trainer.save_model(final_dir)
     tokenizer.save_pretrained(final_dir)
-    print(f"Final model saved to {final_dir}")
-
-    if eval_dataset is not None:
-        best_dir = os.path.join(args.output_dir, "best")
-        if os.path.isdir(best_dir):
-            print(f"Best model (by accuracy) is at {best_dir}")
-        else:
-            print("No best checkpoint saved — eval_file may not have been provided.")
+    print(f"Final (best-by-accuracy) model saved to {final_dir}")
 
 
 if __name__ == "__main__":

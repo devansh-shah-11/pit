@@ -12,13 +12,7 @@ import torch
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
 from transformers import AutoTokenizer, AutoModelForCausalLM
-from evaluation.evaluate_sft import build_prompt, extract_answer, answers_match
-
-
-def build_chat_prompt(question: str, tokenizer) -> str:
-    """Wrap build_prompt in the model's chat format so instruct models respond correctly."""
-    messages = [{"role": "user", "content": build_prompt(question)}]
-    return tokenizer.apply_chat_template(messages, tokenize=False, add_generation_prompt=True)
+from evaluation.evaluate_sft import build_prompt, build_chat_prompt, extract_answer, answers_match
 
 
 def load_samples(path: str):
