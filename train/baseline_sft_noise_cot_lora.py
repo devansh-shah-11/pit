@@ -49,43 +49,59 @@ from train.baseline_sft_noise_cot import (
 
 class LoRAAccuracyEvalCallback(AccuracyEvalCallback):
     """
-    AccuracyEvalCallback variant for PEFT/LoRA models. The parent writes the
-    live model with `save_pretrained` before spinning up vLLM, but on a PEFT
-    model that only emits adapter weights — vLLM then fails because there is
-    no config.json. Here we merge the adapter into a copy of the base model
-    and save the full merged model to `_vllm_tmp`, then defer to the parent
-    for the rest of the eval flow. The 'best' / final adapter saves remain
-    adapter-only (handled by the parent path / main()).
+    AccuracyEvalCallback variant for PEFT/LoRA models.
+
+    Strategy: don't merge. Save just the adapter, and use vLLM's native LoRA
+    support — base model loads once at the configured base_model_name, and we
+    pass a LoRARequest pointing at the freshly written adapter at generate
+    time. Avoids the deepcopy/merge round-trip entirely.
     """
+
+    # Must be >= the largest `r` across LORA_PRESETS.
+    _MAX_LORA_RANK = 32
+
+    def __init__(self, *args, base_model_name: str, **kwargs):
+        super().__init__(*args, **kwargs)
+        self._base_model_name = base_model_name
+        self._lora_request = None
+
+    def _init_vllm(self, model_path):
+        # `model_path` here is the adapter dir we wrote; vLLM needs the base.
+        from vllm import LLM
+        self._vllm = LLM(
+            model=self._base_model_name,
+            dtype="bfloat16",
+            gpu_memory_utilization=0.25,
+            max_model_len=self.max_prompt_length + self.max_new_tokens,
+            tensor_parallel_size=1,
+            trust_remote_code=True,
+            enforce_eager=True,
+            enable_lora=True,
+            max_lora_rank=self._MAX_LORA_RANK,
+            max_loras=1,
+        )
+
+    def _generate_vllm(self, prompts):
+        from vllm import SamplingParams
+        params = SamplingParams(max_tokens=self.max_new_tokens, temperature=0)
+        results = self._vllm.generate(prompts, params, lora_request=self._lora_request)
+        return [r.outputs[0].text for r in results]
 
     def on_evaluate(self, args, state, control, model, **kwargs):
         if not self.use_vllm:
             return super().on_evaluate(args, state, control, model, **kwargs)
 
-        # Build a fresh merged copy on CPU so the live training weights are
-        # never mutated. Repeated in-place merge/unmerge in bf16 accumulates
-        # round-trip error across eval steps; deepcopy + merge_and_unload
-        # avoids touching the trainable adapter at all.
-        import copy
-        tmp_dir = os.path.join(self.output_dir, "_vllm_tmp")
-        with torch.no_grad():
-            merged = copy.deepcopy(model).to("cpu")
-            merged = merged.merge_and_unload()
-            merged.save_pretrained(tmp_dir)
-            self.tokenizer.save_pretrained(tmp_dir)
-            del merged
-        import gc
-        gc.collect()
-        torch.cuda.empty_cache()
-
-        # Prevent the parent's save_pretrained call from overwriting our
-        # merged dir with adapter-only weights.
-        original_save = model.save_pretrained
-        model.save_pretrained = lambda *a, **kw: None
-        try:
-            super().on_evaluate(args, state, control, model, **kwargs)
-        finally:
-            model.save_pretrained = original_save
+        # Save adapter-only; the parent's save_pretrained call below will hit
+        # the PeftModel and write adapter_config.json + adapter_model.safetensors.
+        # We then point a LoRARequest at that dir.
+        from vllm.lora.request import LoRARequest
+        adapter_dir = os.path.join(self.output_dir, "_vllm_tmp")
+        # Bump the int id each step so vLLM treats it as a fresh adapter and
+        # re-reads weights instead of caching the previous step's copy.
+        self._lora_request = LoRARequest(
+            f"pit-lora-{state.global_step}", state.global_step + 1, adapter_dir
+        )
+        super().on_evaluate(args, state, control, model, **kwargs)
 
 
 LORA_PRESETS = {
@@ -204,6 +220,7 @@ def main(args):
             max_prompt_length=args.max_length,
             use_vllm=args.use_vllm,
             model_name=args.model_name,
+            base_model_name=args.model_name,
         )
         callbacks.append(accuracy_callback)
 
