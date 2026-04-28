@@ -244,6 +244,8 @@ def run_vllm(args, targets, tokenizer, output_path, correct_path):
 
     counters = {"pairs": 0, "correct": 0}
     chunk_size = args.vllm_chunk_size
+    failed_chunks = 0
+    failed_prompts = 0
 
     pbar = tqdm(total=len(targets), desc="DPO gen (vLLM)")
     with open(output_path, "a", encoding="utf-8") as f_pair, \
@@ -252,18 +254,26 @@ def run_vllm(args, targets, tokenizer, output_path, correct_path):
             chunk = targets[i : i + chunk_size]
             prompts = [build_chat_prompt(t[0], tokenizer) for t in chunk]
 
-            outs = llm.generate(prompts, sampling_params, use_tqdm=False)
-
-            responses_per_prompt = [
-                [o.text for o in out.outputs] for out in outs
-            ]
-
-            process_outputs(chunk, prompts, responses_per_prompt,
-                            f_pair, f_correct, counters)
+            try:
+                outs = llm.generate(prompts, sampling_params, use_tqdm=False)
+                responses_per_prompt = [
+                    [o.text for o in out.outputs] for out in outs
+                ]
+                process_outputs(chunk, prompts, responses_per_prompt,
+                                f_pair, f_correct, counters)
+            except Exception as exc:
+                failed_chunks += 1
+                failed_prompts += len(chunk)
+                print(f"\n[WARN] chunk starting at idx {i} failed ({len(chunk)} prompts): "
+                      f"{type(exc).__name__}: {exc}. Skipping chunk.")
 
             pbar.update(len(chunk))
-            pbar.set_postfix(pairs=counters["pairs"], correct=counters["correct"])
+            pbar.set_postfix(pairs=counters["pairs"], correct=counters["correct"],
+                             failed=failed_prompts)
     pbar.close()
+
+    if failed_chunks:
+        print(f"[WARN] {failed_chunks} chunk(s) ({failed_prompts} prompt(s)) skipped due to errors.")
 
     return counters
 
