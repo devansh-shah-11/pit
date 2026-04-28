@@ -19,8 +19,8 @@ MODEL_NAME="jahyungu/Qwen2.5-1.5B-Instruct_gsm8k"
 
 MAX_NEW_TOKENS=1024
 NUM_REJECTED_PER_Q=1
-TEMPERATURE=0.8
-INCLUDE_CLEAN_FAILURES=0   # set to 1 to also probe clean (source=original) questions
+TEMPERATURE=0.7
+INCLUDE_CLEAN_FAILURES=1   # set to 1 to also probe clean (source=original) questions
 # ──────────────────────────────────────────────────────────────────────────────
 
 mkdir -p ./logs
