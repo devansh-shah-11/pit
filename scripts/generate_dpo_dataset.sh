@@ -26,6 +26,7 @@ USE_VLLM=1                 # set to 1 to use vLLM for fast batched inference
 VLLM_CHUNK_SIZE=256
 VLLM_GPU_MEM_UTIL=0.85
 VLLM_MAX_MODEL_LEN=2048
+MAX_PROMPT_TOKENS=1024     # drop targets whose prompt exceeds this; needs MAX_PROMPT_TOKENS + MAX_NEW_TOKENS <= VLLM_MAX_MODEL_LEN
 # ──────────────────────────────────────────────────────────────────────────────
 
 mkdir -p ./logs
@@ -68,5 +69,6 @@ singularity exec --bind /scratch --nv \
       --max-new-tokens     $MAX_NEW_TOKENS \
       --num-rejected-per-q $NUM_REJECTED_PER_Q \
       --temperature        $TEMPERATURE \
+      --max-prompt-tokens  $MAX_PROMPT_TOKENS \
       $EXTRA_FLAGS
   "

@@ -306,6 +306,19 @@ def generate(args):
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
 
+    if args.max_prompt_tokens is not None:
+        before = len(targets)
+        kept = []
+        for t in targets:
+            prompt_text = build_chat_prompt(t[0], tokenizer)
+            n_tok = len(tokenizer(prompt_text, add_special_tokens=False)["input_ids"])
+            if n_tok <= args.max_prompt_tokens:
+                kept.append(t)
+        dropped = before - len(kept)
+        targets = kept
+        if dropped:
+            print(f"Dropped {dropped} target(s) whose prompt exceeded {args.max_prompt_tokens} tokens.")
+
     do_sample = args.num_rejected_per_q > 1
     print(
         f"Generation: num_rejected_per_q={args.num_rejected_per_q}  "
@@ -352,6 +365,9 @@ def main():
                    help="vLLM gpu_memory_utilization.")
     p.add_argument("--vllm-max-model-len", type=int, default=2048,
                    help="vLLM max_model_len (prompt + max_new_tokens must fit).")
+    p.add_argument("--max-prompt-tokens", type=int, default=None,
+                   help="Drop targets whose chat-templated prompt exceeds this token count. "
+                        "Recommended: vllm_max_model_len - max_new_tokens.")
     args = p.parse_args()
     generate(args)
 
