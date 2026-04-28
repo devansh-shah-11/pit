@@ -23,7 +23,7 @@ TEMPERATURE=0.7
 INCLUDE_CLEAN_FAILURES=1   # set to 1 to also probe clean (source=original) questions
 
 USE_VLLM=1                 # set to 1 to use vLLM for fast batched inference
-VLLM_CHUNK_SIZE=128
+VLLM_CHUNK_SIZE=256
 VLLM_GPU_MEM_UTIL=0.85
 VLLM_MAX_MODEL_LEN=2048
 # ──────────────────────────────────────────────────────────────────────────────
