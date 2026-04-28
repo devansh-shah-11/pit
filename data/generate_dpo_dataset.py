@@ -157,6 +157,117 @@ def iter_targets(entries, include_clean_failures: bool):
             yield (question, entry["answer"], cur_orig_reasoning, "adversarial")
 
 
+def process_outputs(
+    targets_chunk,
+    prompts_chunk,
+    responses_per_prompt,
+    f_pair,
+    f_correct,
+    counters: dict,
+):
+    """Score responses for a chunk and append to the right files."""
+    for (question, answer, chosen_reasoning, sample_type), prompt_text, responses in zip(
+        targets_chunk, prompts_chunk, responses_per_prompt
+    ):
+        wrote_correct_for_q = False
+        for resp in responses:
+            pred = extract_answer(resp)
+            if answers_match(pred, answer):
+                if not wrote_correct_for_q:
+                    rec = build_correct_record(question, answer, resp, pred, sample_type)
+                    f_correct.write(json.dumps(rec) + "\n")
+                    f_correct.flush()
+                    counters["correct"] += 1
+                    wrote_correct_for_q = True
+            else:
+                rec = build_pair_record(
+                    question, answer, chosen_reasoning, resp, pred,
+                    sample_type, prompt_text,
+                )
+                f_pair.write(json.dumps(rec) + "\n")
+                f_pair.flush()
+                counters["pairs"] += 1
+
+
+def run_hf(args, targets, tokenizer, output_path, correct_path):
+    device = "cuda" if torch.cuda.is_available() else "cpu"
+    print(f"Device: {device}")
+    print(f"Loading HF model: {args.model}")
+    model = AutoModelForCausalLM.from_pretrained(
+        args.model, dtype=torch.bfloat16, trust_remote_code=True
+    ).to(device)
+    model.eval()
+
+    do_sample = args.num_rejected_per_q > 1
+    counters = {"pairs": 0, "correct": 0}
+
+    pbar = tqdm(targets, desc="DPO gen (HF)")
+    with open(output_path, "a", encoding="utf-8") as f_pair, \
+         open(correct_path, "a", encoding="utf-8") as f_correct:
+        for target in pbar:
+            question, answer, chosen_reasoning, sample_type = target
+            pbar.set_postfix(pairs=counters["pairs"], correct=counters["correct"],
+                             q=question[:40])
+            prompt_text = build_chat_prompt(question, tokenizer)
+            responses = generate_responses(
+                model, tokenizer, prompt_text, device,
+                max_new_tokens=args.max_new_tokens,
+                num_return_sequences=args.num_rejected_per_q,
+                do_sample=do_sample,
+                temperature=args.temperature,
+            )
+            process_outputs([target], [prompt_text], [responses],
+                            f_pair, f_correct, counters)
+
+    return counters
+
+
+def run_vllm(args, targets, tokenizer, output_path, correct_path):
+    from vllm import LLM, SamplingParams
+
+    print(f"Loading vLLM model: {args.model}")
+    llm = LLM(
+        model=args.model,
+        dtype="bfloat16",
+        trust_remote_code=True,
+        gpu_memory_utilization=args.vllm_gpu_mem_util,
+        max_model_len=args.vllm_max_model_len,
+    )
+
+    do_sample = args.num_rejected_per_q > 1
+    sampling_params = SamplingParams(
+        n=args.num_rejected_per_q,
+        max_tokens=args.max_new_tokens,
+        temperature=args.temperature if do_sample else 0.0,
+        top_p=0.95 if do_sample else 1.0,
+    )
+
+    counters = {"pairs": 0, "correct": 0}
+    chunk_size = args.vllm_chunk_size
+
+    pbar = tqdm(total=len(targets), desc="DPO gen (vLLM)")
+    with open(output_path, "a", encoding="utf-8") as f_pair, \
+         open(correct_path, "a", encoding="utf-8") as f_correct:
+        for i in range(0, len(targets), chunk_size):
+            chunk = targets[i : i + chunk_size]
+            prompts = [build_chat_prompt(t[0], tokenizer) for t in chunk]
+
+            outs = llm.generate(prompts, sampling_params, use_tqdm=False)
+
+            responses_per_prompt = [
+                [o.text for o in out.outputs] for out in outs
+            ]
+
+            process_outputs(chunk, prompts, responses_per_prompt,
+                            f_pair, f_correct, counters)
+
+            pbar.update(len(chunk))
+            pbar.set_postfix(pairs=counters["pairs"], correct=counters["correct"])
+    pbar.close()
+
+    return counters
+
+
 def generate(args):
     input_path = Path(args.input)
     if not input_path.exists():
@@ -189,67 +300,25 @@ def generate(args):
     if args.n_samples is not None:
         targets = targets[: args.n_samples]
 
-    device = "cuda" if torch.cuda.is_available() else "cpu"
-    print(f"Device: {device}")
-    print(f"Loading model: {args.model}")
+    print(f"Targets to process: {len(targets)}")
+    print(f"Loading tokenizer: {args.model}")
     tokenizer = AutoTokenizer.from_pretrained(args.model, trust_remote_code=True)
     if tokenizer.pad_token is None:
         tokenizer.pad_token = tokenizer.eos_token
-    model = AutoModelForCausalLM.from_pretrained(
-        args.model, dtype=torch.bfloat16, trust_remote_code=True
-    ).to(device)
-    model.eval()
 
     do_sample = args.num_rejected_per_q > 1
     print(
         f"Generation: num_rejected_per_q={args.num_rejected_per_q}  "
         f"do_sample={do_sample}  temperature={args.temperature}  "
-        f"max_new_tokens={args.max_new_tokens}"
+        f"max_new_tokens={args.max_new_tokens}  use_vllm={args.use_vllm}"
     )
 
-    n_pairs = 0
-    n_correct = 0
+    if args.use_vllm:
+        counters = run_vllm(args, targets, tokenizer, output_path, correct_path)
+    else:
+        counters = run_hf(args, targets, tokenizer, output_path, correct_path)
 
-    pbar = tqdm(targets, desc="DPO gen")
-    with open(output_path, "a", encoding="utf-8") as f_pair, \
-         open(correct_path, "a", encoding="utf-8") as f_correct:
-        for question, answer, chosen_reasoning, sample_type in pbar:
-            pbar.set_postfix(pairs=n_pairs, correct=n_correct, q=question[:40])
-
-            prompt_text = build_chat_prompt(question, tokenizer)
-            responses = generate_responses(
-                model, tokenizer, prompt_text, device,
-                max_new_tokens=args.max_new_tokens,
-                num_return_sequences=args.num_rejected_per_q,
-                do_sample=do_sample,
-                temperature=args.temperature,
-            )
-
-            wrote_pair_for_q = False
-            wrote_correct_for_q = False
-            for resp in responses:
-                pred = extract_answer(resp)
-                if answers_match(pred, answer):
-                    if not wrote_correct_for_q:
-                        rec = build_correct_record(question, answer, resp, pred, sample_type)
-                        f_correct.write(json.dumps(rec) + "\n")
-                        f_correct.flush()
-                        n_correct += 1
-                        wrote_correct_for_q = True
-                else:
-                    rec = build_pair_record(
-                        question, answer, chosen_reasoning, resp, pred,
-                        sample_type, prompt_text,
-                    )
-                    f_pair.write(json.dumps(rec) + "\n")
-                    f_pair.flush()
-                    n_pairs += 1
-                    wrote_pair_for_q = True
-
-            if wrote_pair_for_q or wrote_correct_for_q:
-                already_done.add(question)
-
-    print(f"\nDone. Pairs: {n_pairs}  Correct-logged: {n_correct}")
+    print(f"\nDone. Pairs: {counters['pairs']}  Correct-logged: {counters['correct']}")
     print(f"Pairs written to  : {output_path}")
     print(f"Correct logged to : {correct_path}")
 
@@ -275,6 +344,14 @@ def main():
     p.add_argument("--end-to", type=int, default=None)
     p.add_argument("--n-samples", type=int, default=None,
                    help="Optional cap on number of target questions to process.")
+    p.add_argument("--use-vllm", action="store_true",
+                   help="Use vLLM for fast batched inference (requires vllm package).")
+    p.add_argument("--vllm-chunk-size", type=int, default=256,
+                   help="Number of prompts per vLLM batch (controls memory + flush cadence).")
+    p.add_argument("--vllm-gpu-mem-util", type=float, default=0.9,
+                   help="vLLM gpu_memory_utilization.")
+    p.add_argument("--vllm-max-model-len", type=int, default=2048,
+                   help="vLLM max_model_len (prompt + max_new_tokens must fit).")
     args = p.parse_args()
     generate(args)
 

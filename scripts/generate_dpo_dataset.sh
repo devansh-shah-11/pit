@@ -21,6 +21,11 @@ MAX_NEW_TOKENS=1024
 NUM_REJECTED_PER_Q=1
 TEMPERATURE=0.7
 INCLUDE_CLEAN_FAILURES=1   # set to 1 to also probe clean (source=original) questions
+
+USE_VLLM=1                 # set to 1 to use vLLM for fast batched inference
+VLLM_CHUNK_SIZE=128
+VLLM_GPU_MEM_UTIL=0.85
+VLLM_MAX_MODEL_LEN=2048
 # ──────────────────────────────────────────────────────────────────────────────
 
 mkdir -p ./logs
@@ -29,6 +34,9 @@ mkdir -p "$(dirname "$OUTPUT_FILE")"
 EXTRA_FLAGS=""
 if [ "$INCLUDE_CLEAN_FAILURES" = "1" ]; then
   EXTRA_FLAGS="$EXTRA_FLAGS --include-clean-failures"
+fi
+if [ "$USE_VLLM" = "1" ]; then
+  EXTRA_FLAGS="$EXTRA_FLAGS --use-vllm --vllm-chunk-size $VLLM_CHUNK_SIZE --vllm-gpu-mem-util $VLLM_GPU_MEM_UTIL --vllm-max-model-len $VLLM_MAX_MODEL_LEN"
 fi
 
 echo "=============================="
@@ -41,6 +49,7 @@ echo "Correct output:  $CORRECT_FILE"
 echo "Rejected/q:      $NUM_REJECTED_PER_Q  (temperature=$TEMPERATURE if >1)"
 echo "Max new tokens:  $MAX_NEW_TOKENS"
 echo "Clean failures:  $INCLUDE_CLEAN_FAILURES"
+echo "Use vLLM:        $USE_VLLM  (chunk=$VLLM_CHUNK_SIZE, mem_util=$VLLM_GPU_MEM_UTIL, max_len=$VLLM_MAX_MODEL_LEN)"
 echo "=============================="
 
 singularity exec --bind /scratch --nv \
