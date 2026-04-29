@@ -1,8 +1,8 @@
 #!/bin/bash
 #SBATCH --job-name=pit-dpo
 #SBATCH --account=csci_ga_3033_131-2026sp
-#SBATCH --output=./logs_pit_dpo/%j_%x.out
-#SBATCH --error=./logs_pit_dpo/%j_%x.err
+#SBATCH --output=./logs/%j_%x.out
+#SBATCH --error=./logs/%j_%x.err
 #SBATCH --mail-type=END
 #SBATCH --mail-user=dns5508@nyu.edu
 #SBATCH --partition=c12m85-a100-1
@@ -32,7 +32,7 @@ GEN_MAX_NEW_TOKENS=512
 EVAL_STEPS=50
 # ──────────────────────────────────────────────────────────────────────────────
 
-mkdir -p ./logs_pit_dpo
+mkdir -p ./logs
 mkdir -p "$OUTPUT_DIR"
 
 echo "=============================="

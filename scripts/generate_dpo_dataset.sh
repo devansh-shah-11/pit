@@ -7,7 +7,7 @@
 #SBATCH --mail-user=dns5508@nyu.edu
 #SBATCH --partition=c12m85-a100-1
 #SBATCH --gres=gpu:1
-#SBATCH --time=2:00:00
+#SBATCH --time=0:20:00
 #SBATCH --requeue
 
 # ── Configuration ─────────────────────────────────────────────────────────────
