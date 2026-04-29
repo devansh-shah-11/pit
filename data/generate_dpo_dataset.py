@@ -321,7 +321,7 @@ def generate(args):
         kept = []
         for t in targets:
             prompt_text = build_chat_prompt(t[0], tokenizer)
-            n_tok = len(tokenizer(prompt_text, add_special_tokens=False)["input_ids"])
+            n_tok = len(tokenizer(prompt_text, add_special_tokens=True)["input_ids"])
             if n_tok <= args.max_prompt_tokens:
                 kept.append(t)
         dropped = before - len(kept)

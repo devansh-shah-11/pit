@@ -28,7 +28,7 @@ LABEL_SMOOTHING=0.0  # 0.05–0.1 (cDPO) if labels are noisy.
 
 MAX_LENGTH=2048
 MAX_PROMPT_LENGTH=1024
-GEN_MAX_NEW_TOKENS=512
+GEN_MAX_NEW_TOKENS=1024
 EVAL_STEPS=50
 # ──────────────────────────────────────────────────────────────────────────────
 

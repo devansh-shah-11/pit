@@ -48,10 +48,11 @@ from trl import DPOConfig, DPOTrainer
 from evaluation.evaluate_sft import build_chat_prompt, extract_answer, answers_match
 
 
-def load_dpo_jsonl(path: str, tokenizer, max_examples=None):
+def load_dpo_jsonl(path: str, tokenizer, max_examples=None, max_prompt_tokens=None):
     """Load PIT-style DPO jsonl into an HF Dataset of {prompt, chosen, rejected}."""
     eos = tokenizer.eos_token or ""
     rows = []
+    dropped = 0
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
@@ -65,6 +66,13 @@ def load_dpo_jsonl(path: str, tokenizer, max_examples=None):
                 chosen = chosen + eos
             if eos and not rejected.endswith(eos):
                 rejected = rejected + eos
+            if max_prompt_tokens is not None:
+                question = ex.get("question", "") or prompt
+                chat_prompt = build_chat_prompt(question, tokenizer)
+                n_tok = len(tokenizer(chat_prompt, add_special_tokens=True)["input_ids"])
+                if n_tok > max_prompt_tokens:
+                    dropped += 1
+                    continue
             rows.append({
                 "prompt":   prompt,
                 "chosen":   chosen,
@@ -75,18 +83,27 @@ def load_dpo_jsonl(path: str, tokenizer, max_examples=None):
             })
             if max_examples is not None and len(rows) >= max_examples:
                 break
+    if dropped:
+        print(f"  Dropped {dropped} train pair(s) with prompt > {max_prompt_tokens} tokens.")
     return Dataset.from_list(rows)
 
 
-def load_eval_questions(path: str, max_examples=None):
+def load_eval_questions(path: str, max_examples=None, tokenizer=None, max_prompt_tokens=None):
     """Eval set is plain SFT-style records: {question, answer, source}."""
     rows = []
+    dropped = 0
     with open(path, "r", encoding="utf-8") as f:
         for line in f:
             line = line.strip()
             if not line:
                 continue
             ex = json.loads(line)
+            if max_prompt_tokens is not None and tokenizer is not None:
+                chat_prompt = build_chat_prompt(ex["question"], tokenizer)
+                n_tok = len(tokenizer(chat_prompt, add_special_tokens=True)["input_ids"])
+                if n_tok > max_prompt_tokens:
+                    dropped += 1
+                    continue
             rows.append({
                 "question": ex["question"],
                 "answer":   ex["answer"],
@@ -94,6 +111,8 @@ def load_eval_questions(path: str, max_examples=None):
             })
             if max_examples is not None and len(rows) >= max_examples:
                 break
+    if dropped:
+        print(f"  Dropped {dropped} eval question(s) with prompt > {max_prompt_tokens} tokens.")
     return rows
 
 
@@ -278,13 +297,22 @@ def main(args):
     ref_model = None
 
     print(f"Loading DPO train file: {args.train_file}")
-    train_ds = load_dpo_jsonl(args.train_file, tokenizer, max_examples=args.max_train_examples)
+    train_ds = load_dpo_jsonl(
+        args.train_file, tokenizer,
+        max_examples=args.max_train_examples,
+        max_prompt_tokens=args.max_prompt_length,
+    )
     print(f"  → {len(train_ds)} preference pairs")
 
     eval_questions = None
     if args.eval_file:
         print(f"Loading eval file (for accuracy): {args.eval_file}")
-        eval_questions = load_eval_questions(args.eval_file, max_examples=args.max_eval_examples)
+        eval_questions = load_eval_questions(
+            args.eval_file,
+            max_examples=args.max_eval_examples,
+            tokenizer=tokenizer,
+            max_prompt_tokens=args.max_prompt_length,
+        )
         print(f"  → {len(eval_questions)} eval questions")
 
     # Tiny held-out slice of preference pairs gives us eval_loss / reward margins.
