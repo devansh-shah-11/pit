@@ -320,10 +320,7 @@ def main(args):
         loss_type=args.loss_type,
         label_smoothing=args.label_smoothing,
         max_length=args.max_length,
-        max_prompt_length=args.max_prompt_length,
-        # The "prompt" field already carries the chat template, so don't re-apply.
-        # (TRL ≥0.9 auto-detects when tokenizer.chat_template is set; we explicitly
-        #  pass plain strings to keep behavior stable across versions.)
+        truncation_mode="keep_start",
         remove_unused_columns=False,
         optim="adamw_torch",
         weight_decay=0.0,
@@ -390,15 +387,20 @@ if __name__ == "__main__":
     p.add_argument("--beta", type=float, default=0.1,
                    help="DPO temperature. 0.1 = standard. Higher → stay closer to ref.")
     p.add_argument("--loss_type", default="sigmoid",
-                   choices=["sigmoid", "ipo", "hinge", "kto_pair"],
-                   help="sigmoid = vanilla DPO. ipo = length-insensitive. Try both.")
+                   choices=["sigmoid", "ipo", "hinge", "robust",
+                            "exo_pair", "nca_pair", "bco_pair"],
+                   help="sigmoid = vanilla DPO. ipo = length-insensitive. "
+                        "robust = label-noise robust (uses label_smoothing).")
     p.add_argument("--label_smoothing", type=float, default=0.0,
                    help="cDPO; 0.05–0.1 helps if rejected labels are noisy.")
 
     # ── lengths ──
     p.add_argument("--max_length", type=int, default=2048,
-                   help="Total seq length cap (prompt + completion).")
-    p.add_argument("--max_prompt_length", type=int, default=1024)
+                   help="DPO training: total seq cap for prompt+chosen / prompt+rejected. "
+                        "Truncation_mode=keep_start drops the completion tail when over budget.")
+    p.add_argument("--max_prompt_length", type=int, default=1024,
+                   help="Eval-time only: caps the prompt fed to model.generate / vLLM. "
+                        "TRL ≥1.0 no longer has a separate prompt budget for training.")
     p.add_argument("--gen_max_new_tokens", type=int, default=512)
 
     # ── eval / logging ──
