@@ -21,7 +21,15 @@ import torch
 from transformers import AutoModelForCausalLM, AutoTokenizer
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
-from evaluation.evaluate_sft import build_prompt, extract_answer
+from evaluation.evaluate_sft import build_chat_prompt, extract_answer
+
+
+def _stop_token_ids(tokenizer):
+    ids = {tokenizer.eos_token_id}
+    im_end = tokenizer.convert_tokens_to_ids("<|im_end|>")
+    if isinstance(im_end, int) and im_end >= 0 and im_end != tokenizer.unk_token_id:
+        ids.add(im_end)
+    return [i for i in ids if i is not None]
 
 
 def generate(model, tokenizer, prompt, max_new_tokens, temperature, device):
@@ -34,7 +42,7 @@ def generate(model, tokenizer, prompt, max_new_tokens, temperature, device):
             do_sample=do_sample,
             temperature=temperature if do_sample else 1.0,
             pad_token_id=tokenizer.eos_token_id,
-            eos_token_id=tokenizer.eos_token_id,
+            eos_token_id=_stop_token_ids(tokenizer),
         )
     return tokenizer.decode(out[0, enc["input_ids"].shape[1]:], skip_special_tokens=True)
 
@@ -107,7 +115,7 @@ def main():
                 print("usage: :temp T")
             continue
 
-        prompt = user_input if raw_mode else build_prompt(user_input) + "\n"
+        prompt = user_input if raw_mode else build_chat_prompt(user_input, tokenizer)
         completion = generate(model, tokenizer, prompt,
                               max_new_tokens, temperature, device)
 
