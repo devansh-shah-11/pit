@@ -78,10 +78,10 @@ class NoiseCOTDataset(Dataset):
         before = len(self.samples)
         def _tok_len(s):
             prompt = build_chat_prompt(s["question"], tokenizer)
-            return len(tokenizer(
-                prompt + s["raw"] + tokenizer.eos_token,
-                add_special_tokens=False,
-            )["input_ids"])
+            completion = s["raw"] + tokenizer.eos_token
+            p_ids = tokenizer(prompt, add_special_tokens=False)["input_ids"]
+            c_ids = tokenizer(completion, add_special_tokens=False)["input_ids"]
+            return len(p_ids) + len(c_ids)
         self.samples = [s for s in self.samples if _tok_len(s) <= max_length]
         subset = "clean-only" if clean_only else ("noise-only" if noise_only else "all")
         print(f"Loaded {len(self.samples)} training samples ({subset}) from {path} "
@@ -99,26 +99,23 @@ class NoiseCOTDataset(Dataset):
         # Append EOS so the model learns to stop after the answer; otherwise
         # generation runs until max_new_tokens and emits multiple "####" blocks.
         completion = sample["raw"] + self.tokenizer.eos_token
-        full_text = prompt + completion
 
-        full_enc = self.tokenizer(
-            full_text,
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt",
+        # Tokenize prompt and completion separately and concatenate. This makes
+        # prompt_len exact (no boundary-tokenization mismatch) and avoids any
+        # silent truncation — over-length samples are filtered upstream in
+        # NoiseCOTDataset.__init__, so we assert the invariant here.
+        prompt_ids = self.tokenizer(prompt, add_special_tokens=False)["input_ids"]
+        completion_ids = self.tokenizer(completion, add_special_tokens=False)["input_ids"]
+
+        input_ids = prompt_ids + completion_ids
+        assert len(input_ids) <= self.max_length, (
+            f"Sample exceeds max_length={self.max_length} (got {len(input_ids)}); "
+            "should have been filtered in __init__"
         )
-        prompt_enc = self.tokenizer(
-            prompt,
-            truncation=True,
-            max_length=self.max_length,
-            return_tensors="pt",
-        )
+        attention_mask = [1] * len(input_ids)
 
-        input_ids = full_enc["input_ids"].squeeze(0).tolist()
-        attention_mask = full_enc["attention_mask"].squeeze(0).tolist()
-
-        prompt_len = min(prompt_enc["input_ids"].shape[1], len(input_ids))
-        labels = [-100] * prompt_len + input_ids[prompt_len:]
+        prompt_len = len(prompt_ids)
+        labels = [-100] * prompt_len + completion_ids
 
         return {
             "input_ids": input_ids,
