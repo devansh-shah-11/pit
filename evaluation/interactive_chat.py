@@ -43,6 +43,7 @@ def generate(model, tokenizer, prompt, max_new_tokens, temperature, device):
             temperature=temperature if do_sample else 1.0,
             pad_token_id=tokenizer.eos_token_id,
             eos_token_id=_stop_token_ids(tokenizer),
+            repetition_penalty=1.3,
         )
     return tokenizer.decode(out[0, enc["input_ids"].shape[1]:], skip_special_tokens=True)
 
