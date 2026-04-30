@@ -14,7 +14,7 @@
 REPO_DIR="/scratch/dns5508/pit"
 BASE_MODEL="jahyungu/Qwen2.5-1.5B-Instruct_gsm8k"
 CLEAN_MODEL="$REPO_DIR/checkpoints/pit_noise_cot_clean/best"
-ALL_MODEL="$REPO_DIR/checkpoints/pit_noise_cot_all/best"
+ALL_MODEL="$REPO_DIR/checkpoints/checkpoints/pit_noise_cot_noise_all_V2/best"
 
 NOISE_COT_TEST="$REPO_DIR/dataset/noise_cot_test.jsonl"
 GSM8K_TEST="$REPO_DIR/usable_dataset/gsm8k_processed_test.json"
@@ -41,33 +41,33 @@ singularity exec --bind /scratch --nv \
     export PATH=/home/dns5508/.local/bin:\$PATH
     conda activate llmr
 
-    # ── [1/6] Base model — noise_cot_test ─────────────────────────────────────
-    # Base model: use chat template (it's an instruct model).
+    # # ── [1/6] Base model — noise_cot_test ─────────────────────────────────────
+    # # Base model: use chat template (it's an instruct model).
+    # # echo ''
+    # # echo '=== [1/6] Base model — noise_cot_test ==='
+    # # python $REPO_DIR/evaluation/eval_sft_base_model.py \
+    # #   --model_name  $BASE_MODEL \
+    # #   --eval_file   $NOISE_COT_TEST \
+    # #   --batch_size  16 \
+    # #   --max_new_tokens 1024 \
+    # #   --max_prompt_length 1024 \
+    # #   --gpu_memory_utilization 0.85 \
+    # #   --output_file $RESULTS_DIR/base_noise_cot_test.json \
+    # #   --use_vllm \
+    # #   --use_chat_template
+
+    # # ── [2/6] Noise-CoT clean model — noise_cot_test ──────────────────────────
     # echo ''
-    # echo '=== [1/6] Base model — noise_cot_test ==='
+    # echo '=== [2/6] Noise-CoT clean model — noise_cot_test ==='
     # python $REPO_DIR/evaluation/eval_sft_base_model.py \
-    #   --model_name  $BASE_MODEL \
+    #   --model_name  $CLEAN_MODEL \
     #   --eval_file   $NOISE_COT_TEST \
     #   --batch_size  16 \
-    #   --max_new_tokens 512 \
+    #   --max_new_tokens 1024 \
     #   --max_prompt_length 1024 \
     #   --gpu_memory_utilization 0.85 \
-    #   --output_file $RESULTS_DIR/base_noise_cot_test.json \
-    #   --use_vllm \
-    #   --use_chat_template
-
-    # ── [2/6] Noise-CoT clean model — noise_cot_test ──────────────────────────
-    echo ''
-    echo '=== [2/6] Noise-CoT clean model — noise_cot_test ==='
-    python $REPO_DIR/evaluation/eval_sft_base_model.py \
-      --model_name  $CLEAN_MODEL \
-      --eval_file   $NOISE_COT_TEST \
-      --batch_size  16 \
-      --max_new_tokens 512 \
-      --max_prompt_length 1024 \
-      --gpu_memory_utilization 0.85 \
-      --output_file $RESULTS_DIR/clean_model_noise_cot_test.json \
-      --use_vllm
+    #   --output_file $RESULTS_DIR/clean_model_noise_cot_test.json \
+    #   --use_vllm
 
     # ── [3/6] Noise-CoT all model — noise_cot_test ────────────────────────────
     echo ''
@@ -76,7 +76,7 @@ singularity exec --bind /scratch --nv \
       --model_name  $ALL_MODEL \
       --eval_file   $NOISE_COT_TEST \
       --batch_size  16 \
-      --max_new_tokens 512 \
+      --max_new_tokens 1024 \
       --max_prompt_length 1024 \
       --gpu_memory_utilization 0.85 \
       --output_file $RESULTS_DIR/all_model_noise_cot_test.json \
@@ -90,7 +90,7 @@ singularity exec --bind /scratch --nv \
     #   --model_name  $BASE_MODEL \
     #   --eval_file   $GSM8K_TEST \
     #   --batch_size  16 \
-    #   --max_new_tokens 512 \
+    #   --max_new_tokens 1024 \
     #   --max_prompt_length 1024 \
     #   --gpu_memory_utilization 0.85 \
     #   --output_file $RESULTS_DIR/base_gsm8k.json \
@@ -98,17 +98,17 @@ singularity exec --bind /scratch --nv \
     #   --use_chat_template
 
     # ── [5/6] Noise-CoT clean model — GSM8K ───────────────────────────────────
-    echo ''
-    echo '=== [5/6] Noise-CoT clean model — GSM8K ==='
-    python $REPO_DIR/evaluation/eval_sft_base_model.py \
-      --model_name  $CLEAN_MODEL \
-      --eval_file   $GSM8K_TEST \
-      --batch_size  16 \
-      --max_new_tokens 512 \
-      --max_prompt_length 1024 \
-      --gpu_memory_utilization 0.85 \
-      --output_file $RESULTS_DIR/clean_model_gsm8k.json \
-      --use_vllm
+    # echo ''
+    # echo '=== [5/6] Noise-CoT clean model — GSM8K ==='
+    # python $REPO_DIR/evaluation/eval_sft_base_model.py \
+    #   --model_name  $CLEAN_MODEL \
+    #   --eval_file   $GSM8K_TEST \
+    #   --batch_size  16 \
+    #   --max_new_tokens 1024 \
+    #   --max_prompt_length 1024 \
+    #   --gpu_memory_utilization 0.85 \
+    #   --output_file $RESULTS_DIR/clean_model_gsm8k.json \
+    #   --use_vllm
 
     # ── [6/6] Noise-CoT all model — GSM8K ─────────────────────────────────────
     echo ''
@@ -117,7 +117,7 @@ singularity exec --bind /scratch --nv \
       --model_name  $ALL_MODEL \
       --eval_file   $GSM8K_TEST \
       --batch_size  16 \
-      --max_new_tokens 512 \
+      --max_new_tokens 1024 \
       --max_prompt_length 1024 \
       --gpu_memory_utilization 0.85 \
       --output_file $RESULTS_DIR/all_model_gsm8k.json \
