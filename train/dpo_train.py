@@ -107,7 +107,7 @@ def load_eval_questions(path: str, max_examples=None, tokenizer=None, max_prompt
             rows.append({
                 "question": ex["question"],
                 "answer":   ex["answer"],
-                "source":   ex.get("source", "original"),
+                "source":   ex.get("source") or ex.get("type", "original"),
             })
             if max_examples is not None and len(rows) >= max_examples:
                 break
