@@ -20,9 +20,21 @@ def load_samples(path: str):
         return json.load(f)
 
 
-def generate_vllm(llm, prompts, max_new_tokens):
+def _stop_token_ids(tokenizer):
+    ids = {tokenizer.eos_token_id}
+    im_end = tokenizer.convert_tokens_to_ids("<|im_end|>")
+    if isinstance(im_end, int) and im_end >= 0 and im_end != tokenizer.unk_token_id:
+        ids.add(im_end)
+    return [i for i in ids if i is not None]
+
+
+def generate_vllm(llm, prompts, max_new_tokens, tokenizer=None):
     from vllm import SamplingParams
-    params = SamplingParams(max_tokens=max_new_tokens, temperature=0)
+    params = SamplingParams(
+        max_tokens=max_new_tokens,
+        temperature=0,
+        stop_token_ids=_stop_token_ids(tokenizer) if tokenizer else None,
+    )
     results = llm.generate(prompts, params)
     return [r.outputs[0].text for r in results]
 
@@ -43,6 +55,7 @@ def generate_transformers(model, tokenizer, prompts, device, max_new_tokens, max
             max_new_tokens=max_new_tokens,
             do_sample=False,
             pad_token_id=tokenizer.eos_token_id,
+            eos_token_id=_stop_token_ids(tokenizer),
         )
     prompt_len = enc["input_ids"].shape[1]
     return [tokenizer.decode(out[prompt_len:], skip_special_tokens=True) for out in outputs]
@@ -79,7 +92,7 @@ def evaluate_model(model_path, samples, args, device):
         gold_answers = [s["answer"] for s in batch]
 
         if args.use_vllm:
-            generated = generate_vllm(llm, prompts, args.max_new_tokens)
+            generated = generate_vllm(llm, prompts, args.max_new_tokens, tokenizer)
         else:
             generated = generate_transformers(model, tokenizer, prompts, device, args.max_new_tokens, args.max_prompt_length)
 

@@ -134,6 +134,13 @@ class AccuracyEvalCallback(TrainerCallback):
         self.best_accuracy     = -1.0
         self._vllm             = None
 
+    def _stop_token_ids(self):
+        ids = {self.tokenizer.eos_token_id}
+        im_end = self.tokenizer.convert_tokens_to_ids("<|im_end|>")
+        if isinstance(im_end, int) and im_end >= 0 and im_end != self.tokenizer.unk_token_id:
+            ids.add(im_end)
+        return [i for i in ids if i is not None]
+
     def _generate_transformers(self, prompts, model, device):
         self.tokenizer.padding_side = "left"
         enc = self.tokenizer(
@@ -147,7 +154,7 @@ class AccuracyEvalCallback(TrainerCallback):
                 max_new_tokens=self.max_new_tokens,
                 do_sample=False,
                 pad_token_id=self.tokenizer.eos_token_id,
-                eos_token_id=self.tokenizer.eos_token_id,
+                eos_token_id=self._stop_token_ids(),
             )
         prompt_len = enc["input_ids"].shape[1]
         return [self.tokenizer.decode(o[prompt_len:], skip_special_tokens=True) for o in out]
@@ -166,7 +173,11 @@ class AccuracyEvalCallback(TrainerCallback):
 
     def _generate_vllm(self, prompts):
         from vllm import SamplingParams
-        params = SamplingParams(max_tokens=self.max_new_tokens, temperature=0)
+        params = SamplingParams(
+            max_tokens=self.max_new_tokens,
+            temperature=0,
+            stop_token_ids=self._stop_token_ids(),
+        )
         results = self._vllm.generate(prompts, params)
         return [r.outputs[0].text for r in results]
 

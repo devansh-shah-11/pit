@@ -36,6 +36,14 @@ def load_samples(path: str):
     return samples
 
 
+def _stop_token_ids(tokenizer):
+    ids = {tokenizer.eos_token_id}
+    im_end = tokenizer.convert_tokens_to_ids("<|im_end|>")
+    if isinstance(im_end, int) and im_end >= 0 and im_end != tokenizer.unk_token_id:
+        ids.add(im_end)
+    return [i for i in ids if i is not None]
+
+
 def generate_transformers(prompts, model, tokenizer, device, max_new_tokens, max_prompt_length):
     tokenizer.padding_side = "left"
     enc = tokenizer(
@@ -53,6 +61,7 @@ def generate_transformers(prompts, model, tokenizer, device, max_new_tokens, max
             max_new_tokens=max_new_tokens,
             do_sample=False,
             pad_token_id=tokenizer.eos_token_id,
+            eos_token_id=_stop_token_ids(tokenizer),
         )
 
     prompt_len = enc["input_ids"].shape[1]
@@ -61,21 +70,24 @@ def generate_transformers(prompts, model, tokenizer, device, max_new_tokens, max
 
 def generate_vllm(prompts, llm, max_new_tokens, tokenizer=None, max_prompt_length=None):
     from vllm import SamplingParams
-    
-    # Truncate prompts if tokenizer and max_prompt_length are provided
+
     if tokenizer and max_prompt_length:
         truncated_prompts = []
         for prompt in prompts:
             tokens = tokenizer.encode(prompt, truncation=False)
             if len(tokens) > max_prompt_length:
-                # Decode back to text with truncation
                 truncated_text = tokenizer.decode(tokens[:max_prompt_length], skip_special_tokens=False)
                 truncated_prompts.append(truncated_text)
             else:
                 truncated_prompts.append(prompt)
         prompts = truncated_prompts
-    
-    params = SamplingParams(max_tokens=max_new_tokens, temperature=0)
+
+    stop_ids = _stop_token_ids(tokenizer) if tokenizer else None
+    params = SamplingParams(
+        max_tokens=max_new_tokens,
+        temperature=0,
+        stop_token_ids=stop_ids,
+    )
     results = llm.generate(prompts, params)
     return [r.outputs[0].text for r in results]
 
