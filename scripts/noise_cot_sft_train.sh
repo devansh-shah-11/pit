@@ -15,7 +15,7 @@ REPO_DIR="/scratch/dns5508/pit"
 TRAIN_FILE="$REPO_DIR/dataset/noise_cot_train.jsonl"
 EVAL_FILE="$REPO_DIR/dataset/noise_cot_test.jsonl"
 MODEL_NAME="jahyungu/Qwen2.5-1.5B-Instruct_gsm8k"
-OUTPUT_DIR="$REPO_DIR/checkpoints/pit_noise_cot_noise_only"
+OUTPUT_DIR="$REPO_DIR/checkpoints/pit_noise_cot_noise_all_V2"
 
 # ~200 train rows, effective batch = BATCH_SIZE * GRAD_ACCUM = 2 * 16 = 32
 # => ~6 steps/epoch; 10 epochs = ~60 steps total; eval every 10 steps
